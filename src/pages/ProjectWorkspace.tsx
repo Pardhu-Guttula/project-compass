@@ -30,7 +30,8 @@
      try {
        await dispatch(createProject(payload)).unwrap();
        setDialogOpen(false);
-       navigate('/chat');
+       // Refresh the projects list to show the newly created project
+       await dispatch(fetchProjects('Pardhu.Guttula@brillio.com'));
      } catch (error) {
        console.error('Failed to create project:', error);
      } finally {

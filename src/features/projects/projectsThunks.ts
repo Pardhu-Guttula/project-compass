@@ -11,8 +11,14 @@
  
  export const createProject = createAsyncThunk(
    'projects/createProject',
-   async (payload: CreateProjectPayload) => {
-     return await projectsService.createProject(payload);
+   async (payload: CreateProjectPayload, { rejectWithValue }) => {
+     try {
+       const result = await projectsService.createProject(payload);
+       // Note: projectsService internally calls fetchProjects to refresh the list
+       return result;
+     } catch (error) {
+       return rejectWithValue(error instanceof Error ? error.message : 'Failed to create project');
+     }
    }
  );
  
