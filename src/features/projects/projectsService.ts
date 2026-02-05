@@ -1,13 +1,25 @@
  import type { Project, CreateProjectPayload } from '@/types';
  import { mockProjects, delay } from '@/api/mockData';
+ import axiosInstance from '@/api/axiosInstance';
  
  // In-memory storage for projects
  let projectsStore: Project[] = [...mockProjects];
  
  export const projectsService = {
-   async fetchProjects(): Promise<Project[]> {
-     await delay(800);
-     return projectsStore;
+   async fetchProjects(email: string): Promise<Project[]> {
+     try {
+       const response = await axiosInstance.post('/webhook/get-user-workspace-details', {
+         email,
+       });
+       // Transform API response to Project format if needed
+       const projects = response.data?.projects || [];
+       projectsStore = projects;
+       return projects;
+     } catch (error) {
+       console.error('Failed to fetch projects from API:', error);
+       // Fallback to mock data on error
+       return mockProjects;
+     }
    },
  
    async createProject(payload: CreateProjectPayload): Promise<Project> {

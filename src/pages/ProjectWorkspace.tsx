@@ -17,7 +17,7 @@
    const [creating, setCreating] = useState(false);
  
    useEffect(() => {
-     dispatch(fetchProjects());
+     dispatch(fetchProjects('Pardhu.Guttula@brillio.com'));
    }, [dispatch]);
  
    const handleProjectClick = async (project: Project) => {
