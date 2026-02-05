@@ -66,6 +66,8 @@
        }),
      };
      onSubmit(payload);
+     // Reset form after successful submission
+     resetForm();
    };
  
    const resetForm = () => {

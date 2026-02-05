@@ -25,6 +25,7 @@
        dispatch(runOrchestrator({
          projectId: selectedProject.id,
          usecase: selectedProject.usecase,
+         projectName: selectedProject.projectName,
        }));
      }
    }, [selectedProject, dispatch]);
