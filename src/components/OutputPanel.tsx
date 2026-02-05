@@ -85,7 +85,7 @@
              </OutputCard>
  
              <OutputCard
-               title="Code Generation"
+               title="Code Base"
                icon={<Code className="h-4 w-4" />}
                loading={loadingTool === 'code_gen'}
                onRefresh={() => handleRefresh('code_gen')}
@@ -93,32 +93,8 @@
                <StackBlitzOutput data={outputs.code_gen} />
              </OutputCard>
  
-             <OutputCard
-               title="CI/CD Pipeline"
-               icon={<GitBranch className="h-4 w-4" />}
-               loading={loadingTool === 'cicd'}
-               onRefresh={() => handleRefresh('cicd')}
-             >
-               <StackBlitzOutput data={outputs.cicd} />
-             </OutputCard>
- 
-             <OutputCard
-               title="Test Cases"
-               icon={<TestTube className="h-4 w-4" />}
-               loading={loadingTool === 'test_cases'}
-               onRefresh={() => handleRefresh('test_cases')}
-             >
-               <StackBlitzOutput data={outputs.test_cases} />
-             </OutputCard>
- 
-             <OutputCard
-               title="Test Data"
-               icon={<Database className="h-4 w-4" />}
-               loading={loadingTool === 'test_data'}
-               onRefresh={() => handleRefresh('test_data')}
-             >
-               <StackBlitzOutput data={outputs.test_data} />
-             </OutputCard>
+             
+            
            </div>
          </ScrollArea>
        </div>
