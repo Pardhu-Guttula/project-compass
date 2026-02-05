@@ -1,14 +1,12 @@
- import axios from 'axios';
- 
- const axiosInstance = axios.create({
-   baseURL: '/api', // Will be replaced with actual API URL
-   timeout: 30000,
-   headers: {
-     'Content-Type': 'application/json',
-   },
- });
- 
- // Request interceptor
+import axios from 'axios';
+
+const axiosInstance = axios.create({
+  baseURL: 'https://cloudoptics-n8n.westcentralus.cloudapp.azure.com',
+  timeout: 30000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+}); // Request interceptor
  axiosInstance.interceptors.request.use(
    (config) => {
      // Add auth token if available

@@ -4,8 +4,8 @@
  
  export const fetchProjects = createAsyncThunk(
    'projects/fetchProjects',
-   async () => {
-     return await projectsService.fetchProjects();
+   async (email: string) => {
+     return await projectsService.fetchProjects(email);
    }
  );
  
