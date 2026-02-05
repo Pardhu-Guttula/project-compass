@@ -1,45 +1,127 @@
- import type { ToolType, OrchestratorResponse, EpicsResponse, ArchitectureResponse, CodeGenResponse } from '@/types';
- import {
-   mockOrchestratorResponse,
-   mockEpicsResponse,
-   mockArchGenResponse,
-   mockArchValResponse,
-   mockCodeGenResponse,
-   mockCicdResponse,
-   mockTestCasesResponse,
-   mockTestDataResponse,
-   delay,
- } from '@/api/mockData';
- 
- export interface ToolPayload {
-   projectId: string;
-   usecase: string;
-   prompt?: string;
- }
- 
- export const toolsService = {
+import type { ToolType, OrchestratorResponse, EpicsResponse, ArchitectureResponse, CodeGenResponse } from '@/types';
+import {
+  mockOrchestratorResponse,
+  mockEpicsResponse,
+  mockArchGenResponse,
+  mockArchValResponse,
+  mockCodeGenResponse,
+  mockCicdResponse,
+  mockTestCasesResponse,
+  mockTestDataResponse,
+  delay,
+} from '@/api/mockData';
+import axiosInstance from '@/api/axiosInstance';
+
+export interface ToolPayload {
+  projectId: string;
+  usecase: string;
+  prompt?: string;
+  projectName?: string;
+}
+
+// Helper function to convert base64 to data URL
+function base64ToDataUrl(base64String: string): string {
+  if (!base64String) return '';
+  // Check if it's already a data URL
+  if (base64String.startsWith('data:')) {
+    return base64String;
+  }
+  // Convert base64 to data URL (assume PNG, can be adjusted if needed)
+  return `data:image/png;base64,${base64String}`;
+}
+
+// Transform API response to OrchestratorResponse format
+function transformApiResponse(apiData: any): OrchestratorResponse {
+  return {
+    epics_and_user_stories: {
+      titles: apiData.epics?.map((e: any) => e.title).filter((t: string) => t) || [],
+      jiraUrl: 'https://jira.example.com/project/DEFAULT',
+    },
+    arch_gen: {
+      image: apiData.arch_gen ? base64ToDataUrl(apiData.arch_gen) : mockArchGenResponse.image,
+    },
+    arch_val: {
+      image: apiData.arch_val ? base64ToDataUrl(apiData.arch_val) : mockArchValResponse.image,
+    },
+    code_gen: mockCodeGenResponse,
+    cicd: mockCicdResponse,
+    test_cases: mockTestCasesResponse,
+    test_data: mockTestDataResponse,
+  };
+} export const toolsService = {
    async runOrchestrator(payload: ToolPayload): Promise<OrchestratorResponse> {
-     await delay(2000);
-     console.log('Running orchestrator with:', payload);
-     return mockOrchestratorResponse;
+     try {
+       const projectName = payload.projectName || 'CloudOptics';
+       const response = await axiosInstance.post('/webhook/get-selected-workspace-response', {
+         project_name: projectName,
+         type: 'main_orchestrator',
+       });
+
+       const data = Array.isArray(response.data) ? response.data[0] : response.data;
+       return transformApiResponse(data);
+     } catch (error) {
+       console.error('Failed to fetch orchestrator data from API:', error);
+       await delay(2000);
+       return mockOrchestratorResponse;
+     }
    },
  
    async runEpics(payload: ToolPayload): Promise<EpicsResponse> {
-     await delay(1500);
-     console.log('Running epics with:', payload);
-     return mockEpicsResponse;
+     try {
+       const projectName = payload.projectName || 'CloudOptics';
+       const response = await axiosInstance.post('/webhook/get-selected-workspace-response', {
+         project_name: projectName,
+         type: 'epics',
+       });
+
+       const data = Array.isArray(response.data) ? response.data[0] : response.data;
+       return {
+         titles: data.epics?.map((e: any) => e.title).filter((t: string) => t) || [],
+         jiraUrl: 'https://jira.example.com/project/DEFAULT',
+       };
+     } catch (error) {
+       console.error('Failed to fetch epics from API:', error);
+       await delay(1500);
+       return mockEpicsResponse;
+     }
    },
  
    async runArchGen(payload: ToolPayload): Promise<ArchitectureResponse> {
-     await delay(1500);
-     console.log('Running arch gen with:', payload);
-     return mockArchGenResponse;
+     try {
+       const projectName = payload.projectName || 'CloudOptics';
+       const response = await axiosInstance.post('/webhook/get-selected-workspace-response', {
+         project_name: projectName,
+         type: 'architecture_generation',
+       });
+
+       const data = Array.isArray(response.data) ? response.data[0] : response.data;
+       return {
+         image: data.arch_gen ? base64ToDataUrl(data.arch_gen) : mockArchGenResponse.image,
+       };
+     } catch (error) {
+       console.error('Failed to fetch architecture generation from API:', error);
+       await delay(1500);
+       return mockArchGenResponse;
+     }
    },
  
    async runArchVal(payload: ToolPayload): Promise<ArchitectureResponse> {
-     await delay(1500);
-     console.log('Running arch val with:', payload);
-     return mockArchValResponse;
+     try {
+       const projectName = payload.projectName || 'CloudOptics';
+       const response = await axiosInstance.post('/webhook/get-selected-workspace-response', {
+         project_name: projectName,
+         type: 'architecture_validation',
+       });
+
+       const data = Array.isArray(response.data) ? response.data[0] : response.data;
+       return {
+         image: data.arch_val ? base64ToDataUrl(data.arch_val) : mockArchValResponse.image,
+       };
+     } catch (error) {
+       console.error('Failed to fetch architecture validation from API:', error);
+       await delay(1500);
+       return mockArchValResponse;
+     }
    },
  
    async runCodeGen(payload: ToolPayload): Promise<CodeGenResponse> {

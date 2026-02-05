@@ -19,6 +19,7 @@
      const payload = {
        projectId: selectedProject.id,
        usecase: selectedProject.usecase,
+       projectName: selectedProject.projectName,
      };
  
      if (tool && tool !== 'orchestrator') {
