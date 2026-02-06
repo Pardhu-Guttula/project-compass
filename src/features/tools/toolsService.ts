@@ -32,11 +32,24 @@ function base64ToDataUrl(base64String: string): string {
 
 // Transform API response to OrchestratorResponse format
 function transformApiResponse(apiData: any): OrchestratorResponse {
+  const epics = apiData?.epics ?? [];
+  const ids = epics.map((e: any) => e?.id).filter((id): id is string => Boolean(id));
+  console.log('Extracted epics and IDs from API response:', { epics, ids });
   return {
     epics_and_user_stories: {
-      titles: apiData.epics?.map((e: any) => e.title).filter((t: string) => t) || [],
-      jiraUrl: 'https://jira.example.com/project/DEFAULT',
+      titles: epics
+        .map((e: any) => e?.title)
+        .filter((t): t is string => Boolean(t)),
+
+      ids: epics
+        .map((e: any) => e?.id)
+        .filter((id): id is string => Boolean(id)),
+
+      jiraUrl:
+        apiData?.jira_url ||
+        'https://jira.example.com/project/DEFAULT',
     },
+
     arch_gen: {
       image: apiData.arch_gen ? base64ToDataUrl(apiData.arch_gen) : mockArchGenResponse.image,
     },
@@ -48,7 +61,9 @@ function transformApiResponse(apiData: any): OrchestratorResponse {
     test_cases: mockTestCasesResponse,
     test_data: mockTestDataResponse,
   };
-} export const toolsService = {
+} 
+
+export const toolsService = {
    async runOrchestrator(payload: ToolPayload): Promise<OrchestratorResponse> {
      try {
        const projectName = payload.projectName || 'CloudOptics';
@@ -58,6 +73,8 @@ function transformApiResponse(apiData: any): OrchestratorResponse {
        });
 
        const data = Array.isArray(response.data) ? response.data[0] : response.data;
+       console.log("data", data);
+       
        return transformApiResponse(data);
      } catch (error) {
        console.error('Failed to fetch orchestrator data from API:', error);
