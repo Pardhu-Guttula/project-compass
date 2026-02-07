@@ -176,7 +176,7 @@
  
  function EpicsOutput({ data }: { data?: { titles: string[]; jiraUrl: string } }) {
    if (!data) {
-     return <p className="text-sm text-muted-foreground">No data found</p>;
+     return <p className="text-sm text-muted-foreground">No</p>;
    }
  
    return (
@@ -216,27 +216,38 @@
      return <p className="text-sm text-muted-foreground">No data found</p>;
    }
  
-   // Convert GitHub URL to StackBlitz embed URL
-   const repoPath = data.repoUrl.replace('https://github.com/', '').replace('.git', '');
-   const stackBlitzUrl = `https://stackblitz.com/github/${repoPath}?embed=1&file=README.md&terminal=dev`;
- 
+  // Convert GitHub URL to StackBlitz embed and fork URLs
+  const repoPath = data.repoUrl.replace('https://github.com/', '').replace('.git', '');
+  console.log('Repo Path for StackBlitz:', repoPath);
+  const stackBlitzUrl = `https://stackblitz.com/github/${repoPath}?embed=1&file=README.md&terminal=1&view=editor`;
+  const stackBlitzForkUrl = `https://stackblitz.com/fork/github/${repoPath}`;
+  console.log('StackBlitz Embed URL:', stackBlitzUrl);
    return (
-     <div className="space-y-3">
-       <div className="rounded-lg overflow-hidden border" style={{ height: '300px' }}>
-         <iframe
-           src={stackBlitzUrl}
-           title="StackBlitz Preview"
-           className="w-full h-full"
-           allow="accelerometer; ambient-light-sensor; camera; encrypted-media; geolocation; gyroscope; hid; microphone; midi; payment; usb; vr; xr-spatial-tracking"
-           sandbox="allow-forms allow-modals allow-popups allow-presentation allow-same-origin allow-scripts"
-         />
-       </div>
-       <Button variant="outline" size="sm" asChild>
-         <a href={data.repoUrl} target="_blank" rel="noopener noreferrer">
-           Open in GitHub <ExternalLink className="h-3 w-3 ml-1" />
-         </a>
-       </Button>
-     </div>
+    <div className="space-y-3">
+      <div className="relative rounded-lg overflow-hidden border" style={{ height: '300px' }}>
+        <iframe
+          src={stackBlitzUrl}
+          title="StackBlitz Preview"
+          className="w-full h-full"
+          allow="accelerometer; ambient-light-sensor; camera; encrypted-media; geolocation; gyroscope; hid; microphone; midi; payment; usb; vr; xr-spatial-tracking"
+          sandbox="allow-forms allow-modals allow-popups allow-presentation allow-same-origin allow-scripts"
+        />
+
+      </div>
+
+      <div className="flex gap-2">
+        <Button variant="outline" size="sm" asChild>
+          <a href={stackBlitzForkUrl} target="_blank" rel="noopener noreferrer">
+            Fork on StackBlitz <ExternalLink className="h-3 w-3 ml-1" />
+          </a>
+        </Button>
+        <Button variant="outline" size="sm" asChild>
+          <a href={data.repoUrl} target="_blank" rel="noopener noreferrer">
+            Open in GitHub <ExternalLink className="h-3 w-3 ml-1" />
+          </a>
+        </Button>
+      </div>
+    </div>
    );
  }
  
