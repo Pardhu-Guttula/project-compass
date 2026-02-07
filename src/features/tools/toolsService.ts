@@ -29,12 +29,46 @@ function base64ToDataUrl(base64String: string): string {
   // Convert base64 to data URL (assume PNG, can be adjusted if needed)
   return `data:image/png;base64,${base64String}`;
 }
+//fetch repo
+async function fetchWorkspaceRepo(projectName: string): Promise<string> {
+  try {
+    const response = await axiosInstance.post(
+      '/webhook/get-user-workspace-details',
+      { project_name: projectName }
+    );
+
+    const data = Array.isArray(response.data)
+      ? response.data[0]
+      : response.data;
+
+    console.log("Workspace details:", data);
+
+    //  adjust this based on actual API structure
+    return data?.repo_url || '';
+
+  } catch (error) {
+    console.error('Workspace repo fetch failed:', error);
+    return '';
+  }
+}
+
+//getrepo
+function getRepo(apiData: any, key: string): CodeGenResponse {
+  const repo = apiData?.[key]?.repo_url;
+
+  console.log(`Repo for ${key}:`, repo);
+
+  return {
+    repoUrl: repo || '',
+  };
+}
 
 // Transform API response to OrchestratorResponse format
 function transformApiResponse(apiData: any): OrchestratorResponse {
   const epics = apiData?.epics ?? [];
   const ids = epics.map((e: any) => e?.id).filter((id): id is string => Boolean(id));
   console.log('Extracted epics and IDs from API response:', { epics, ids });
+  console.log('Code gen repo URL:', getRepo(apiData, 'code_gen').repoUrl)
   return {
     epics_and_user_stories: {
       titles: epics
@@ -56,10 +90,22 @@ function transformApiResponse(apiData: any): OrchestratorResponse {
     arch_val: {
       image: apiData.arch_val ? base64ToDataUrl(apiData.arch_val) : mockArchValResponse.image,
     },
-    code_gen: mockCodeGenResponse,
-    cicd: mockCicdResponse,
-    test_cases: mockTestCasesResponse,
-    test_data: mockTestDataResponse,
+    //code_gen: mockCodeGenResponse,
+    //cicd: mockCicdResponse,
+    //test_cases: mockTestCasesResponse,
+    //test_data: mockTestDataResponse,
+    code_gen: {
+      repoUrl: apiData?.repo_url || '',
+    },
+    cicd: {
+      repoUrl: apiData?.repo_url || '',
+    },
+    test_cases: {
+      repoUrl: apiData?.repo_url || '',
+    },
+    test_data: {
+      repoUrl: apiData?.repo_url || '',
+    },
   };
 } 
 
@@ -112,8 +158,10 @@ export const toolsService = {
        });
 
        const data = Array.isArray(response.data) ? response.data[0] : response.data;
+       console.log('API response for architecture generation:', data) // Debug log
        return {
          image: data.arch_gen ? base64ToDataUrl(data.arch_gen) : mockArchGenResponse.image,
+        
        };
      } catch (error) {
        console.error('Failed to fetch architecture generation from API:', error);
@@ -140,31 +188,105 @@ export const toolsService = {
        return mockArchValResponse;
      }
    },
- 
    async runCodeGen(payload: ToolPayload): Promise<CodeGenResponse> {
-     await delay(1500);
-     console.log('Running code gen with:', payload);
-     return mockCodeGenResponse;
-   },
+  try {
+    const projectName = payload.projectName || 'CloudOptics';
+
+    const response = await axiosInstance.post(
+      '/webhook/get-user-workspace-details',
+      {
+        project_name: projectName,
+        type: 'code_gen',
+      }
+    );
+
+    const data = Array.isArray(response.data)
+      ? response.data[0]
+      : response.data;
+
+    return getRepo(data, 'code_gen');
+
+  } catch (error) {
+    console.error('Code gen API failed:', error);
+    return { repoUrl: '' };
+  }
+},
+async runCicd(payload: ToolPayload): Promise<CodeGenResponse> {
+  try {
+    const projectName = payload.projectName || 'CloudOptics';
+
+    const response = await axiosInstance.post(
+      '/webhook/get-user-workspace-details',
+      {
+        project_name: projectName,
+        type: 'cicd',
+      }
+    );
+
+    const data = Array.isArray(response.data)
+      ? response.data[0]
+      : response.data;
+
+    return getRepo(data, 'cicd');
+
+  } catch (error) {
+    console.error('CI/CD API failed:', error);
+    return { repoUrl: '' };
+  }
+},
+async runTestCases(payload: ToolPayload): Promise<CodeGenResponse> {
+  try {
+    const projectName = payload.projectName || 'CloudOptics';
+
+    const response = await axiosInstance.post(
+      '/webhook/get-user-workspace-details',
+      {
+        project_name: projectName,
+        type: 'test_cases',
+      }
+    );
+
+    const data = Array.isArray(response.data)
+      ? response.data[0]
+      : response.data;
+
+    return getRepo(data, 'test_cases');
+
+  } catch (error) {
+    console.error('Test cases API failed:', error);
+    return { repoUrl: '' };
+  }
+},
+async runTestData(payload: ToolPayload): Promise<CodeGenResponse> {
+  try {
+    const projectName = payload.projectName || 'CloudOptics';
+
+    const response = await axiosInstance.post(
+      '/webhook/get-user-workspace-details',
+      {
+        project_name: projectName,
+        type: 'test_data',
+      }
+    );
+
+    const data = Array.isArray(response.data)
+      ? response.data[0]
+      : response.data;
+
+    return getRepo(data, 'test_data');
+
+  } catch (error) {
+    console.error('Test data API failed:', error);
+    return { repoUrl: '' };
+  }
+},
+
+
  
-   async runCicd(payload: ToolPayload): Promise<CodeGenResponse> {
-     await delay(1500);
-     console.log('Running cicd with:', payload);
-     return mockCicdResponse;
-   },
- 
-   async runTestCases(payload: ToolPayload): Promise<CodeGenResponse> {
-     await delay(1500);
-     console.log('Running test cases with:', payload);
-     return mockTestCasesResponse;
-   },
- 
-   async runTestData(payload: ToolPayload): Promise<CodeGenResponse> {
-     await delay(1500);
-     console.log('Running test data with:', payload);
-     return mockTestDataResponse;
-   },
- 
+   
+
+
+   
    async runTool(tool: ToolType, payload: ToolPayload) {
      switch (tool) {
        case 'orchestrator':

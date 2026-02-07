@@ -49,6 +49,7 @@
  // API Response Types
  export interface EpicsResponse {
    titles: string[];
+   ids?: string[];
    jiraUrl: string;
  }
  

@@ -174,16 +174,21 @@
    );
  }
  
- function EpicsOutput({ data }: { data?: { titles: string[]; jiraUrl: string } }) {
+function EpicsOutput({ data }: { data?: { titles: string[]; ids?: string[]; jiraUrl: string } }) {
    if (!data) {
-     return <p className="text-sm text-muted-foreground">No</p>;
+     return <p className="text-sm text-muted-foreground">No data found</p>;
    }
- 
+
    return (
      <div className="space-y-3">
        {data.titles.slice(0, 2).map((title, i) => (
          <div key={i} className="p-3 bg-muted rounded-lg">
-           <p className="text-sm font-medium">{title}</p>
+           <p className="text-sm font-medium">
+             {data.ids?.[i] && (
+               <span className="text-primary font-semibold mr-2">{data.ids[i]}</span>
+             )}
+             {title}
+           </p>
          </div>
        ))}
        <Button variant="link" size="sm" className="p-0 h-auto" asChild>
@@ -197,7 +202,11 @@
  
  function ArchitectureOutput({ data }: { data?: { image: string } }) {
    if (!data) {
-     return <p className="text-sm text-muted-foreground">No data found</p>;
+     return <p className="text-sm text-muted-foreground">No data found. Please run the workflow or refresh to fetch architecture from the API.</p>;
+   }
+
+   if (!data.image) {
+     return <p className="text-sm text-muted-foreground">Failed to fetch architecture. Please check the API response and try again.</p>;
    }
  
    return (
