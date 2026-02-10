@@ -1,20 +1,24 @@
- import { useAppSelector, useAppDispatch } from '@/store/hooks';
- import { ScrollArea } from '@/components/ui/scroll-area';
- import { Button } from '@/components/ui/button';
- import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
- import { Skeleton } from '@/components/ui/skeleton';
- import { Progress } from '@/components/ui/progress';
- import { runOrchestrator, runTool } from '@/features/tools/toolsThunks';
- import { ExternalLink, RefreshCw, Loader2, FileText, Image as ImageIcon, Code, TestTube, Database, GitBranch } from 'lucide-react';
- import { getToolLabel } from '@/constants/tools';
- 
- export function OutputPanel() {
-   const dispatch = useAppDispatch();
-   const { selectedTool, outputs, loading, loadingTool } = useAppSelector((state) => state.tools);
-   const { selectedProject } = useAppSelector((state) => state.projects);
- 
-   const handleRefresh = (tool?: string) => {
+import { useAppSelector, useAppDispatch } from '@/store/hooks';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Progress } from '@/components/ui/progress';
+import { runOrchestrator, runTool } from '@/features/tools/toolsThunks';
+import { ExternalLink, RefreshCw, Loader2, FileText, Image as ImageIcon, Code, TestTube, Database, GitBranch } from 'lucide-react';
+import { getToolLabel } from '@/constants/tools';
+import { useEffect, useRef } from 'react';
+
+export function OutputPanel() {
+  const dispatch = useAppDispatch();
+  const { selectedTool, outputs, loading, loadingTool } = useAppSelector((state) => state.tools);
+  const { selectedProject } = useAppSelector((state) => state.projects);
+  const lastToolDispatchTimeRef = useRef<{ [key: string]: number }>({});   const handleRefresh = (tool?: string) => {
      if (!selectedProject) return;
+     
+     // Set cooldown flag to prevent observer from triggering duplicate call
+     const toolKey = tool || 'orchestrator';
+     sessionStorage.setItem(`n8n_last_dispatch_${toolKey}`, Date.now().toString());
      
      const payload = {
        projectId: selectedProject.id,

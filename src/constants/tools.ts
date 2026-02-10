@@ -54,6 +54,7 @@
    arch_gen: 'https://cloudoptics-n8n.westcentralus.cloudapp.azure.com/webhook/7f79f7c9-ea10-40ee-b6ad-982ba4848c91/chat',
    arch_val: 'https://cloudoptics-n8n.westcentralus.cloudapp.azure.com/webhook/50487dc2-007f-44b4-8551-7d75ca20355f/chat',
    code_gen: 'https://cloudoptics-n8n.westcentralus.cloudapp.azure.com/webhook/d38c6a32-549e-4ad1-bdab-e51fb90fd991/chat',
+   
  };
 
  // Main orchestrator API endpoint (triggered after each bot reply)
