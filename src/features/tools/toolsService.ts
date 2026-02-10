@@ -134,14 +134,16 @@ export const toolsService = {
        const projectName = payload.projectName || 'CloudOptics';
        const response = await axiosInstance.post('/webhook/get-selected-workspace-response', {
          project_name: projectName,
-         type: 'epics',
+         type: 'main_orchestrator',
        });
 
        const data = Array.isArray(response.data) ? response.data[0] : response.data;
-       return {
-         titles: data.epics?.map((e: any) => e.title).filter((t: string) => t) || [],
-         jiraUrl: 'https://jira.example.com/project/DEFAULT',
-       };
+      // Return titles and ids to match orchestrator response structure
+      return {
+        titles: data.epics?.map((e: any) => e?.title).filter((t: string) => Boolean(t)) || [],
+        ids: data.epics?.map((e: any) => e?.id).filter((id: any) => Boolean(id)) || [],
+        jiraUrl: data?.jira_url || 'https://jira.example.com/project/DEFAULT',
+      };
      } catch (error) {
        console.error('Failed to fetch epics from API:', error);
        await delay(1500);
@@ -154,7 +156,7 @@ export const toolsService = {
        const projectName = payload.projectName || 'CloudOptics';
        const response = await axiosInstance.post('/webhook/get-selected-workspace-response', {
          project_name: projectName,
-         type: 'architecture_generation',
+         type: 'main_orchestrator',
        });
 
        const data = Array.isArray(response.data) ? response.data[0] : response.data;
@@ -175,7 +177,7 @@ export const toolsService = {
        const projectName = payload.projectName || 'CloudOptics';
        const response = await axiosInstance.post('/webhook/get-selected-workspace-response', {
          project_name: projectName,
-         type: 'architecture_validation',
+         type: 'main_orchestrator',
        });
 
        const data = Array.isArray(response.data) ? response.data[0] : response.data;
