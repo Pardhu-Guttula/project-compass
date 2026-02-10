@@ -250,6 +250,18 @@ function EpicsOutput({ data }: { data?: { titles: string[]; ids?: string[]; jira
             Fork on StackBlitz <ExternalLink className="h-3 w-3 ml-1" />
           </a>
         </Button>
+
+        <Button variant="outline" size="sm" asChild>
+          <a
+            href={`vscode://vscode.git/clone?url=${encodeURIComponent(data.repoUrl)}`}
+            // keep same behavior as external links: open in new tab/window if possible
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Open in VS Code <ExternalLink className="h-3 w-3 ml-1" />
+          </a>
+        </Button>
+
         <Button variant="outline" size="sm" asChild>
           <a href={data.repoUrl} target="_blank" rel="noopener noreferrer">
             Open in GitHub <ExternalLink className="h-3 w-3 ml-1" />

@@ -33,14 +33,20 @@ import axios from 'axios';
       containerRef.current.style.height = '100%';
       
       console.log('Creating chat instance with webhook:', webhookUrl);
+
+
+      const currentSessionId = localStorage.getItem('n8n-chat/sessionId');
+      console.log('Current n8n chat session ID:', currentSessionId);
       
       createChat({
         webhookUrl: webhookUrl,
         target: '#n8n-chat-container',
+        chatSessionKey: 'sessionId',
+
         metadata: {
           project_name: selectedProject?.projectName || '',
           usecase: selectedProject?.usecase || '',
-          session_id: sessionId,
+          sessionId: sessionId,
           tool: selectedTool || 'orchestrator',
         },
         mode: 'fullscreen',
@@ -53,7 +59,7 @@ import axios from 'axios';
             title: '',
             subtitle: '',
             footer: '',
-            getStarted: 'New Conversation',
+            getStarted: '',
             inputPlaceholder: 'Type your question..',
             closeButtonTooltip: 'Close',
           },
