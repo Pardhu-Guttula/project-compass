@@ -251,7 +251,6 @@ function EpicsOutput({ data }: { data?: { titles: string[]; ids?: string[]; jira
       }
     };
 
-    // Listen for responses from the iframe (optional)
     const onMessage = (ev: MessageEvent) => {
       // You can refine origin checks here if desired
       if (!ev.data || typeof ev.data !== 'object') return;
