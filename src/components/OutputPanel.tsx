@@ -229,36 +229,70 @@ function EpicsOutput({ data }: { data?: { titles: string[]; ids?: string[]; jira
      return <p className="text-sm text-muted-foreground">No data found</p>;
    }
  
-  // Convert GitHub URL to StackBlitz embed and fork URLs
-  const repoPath = data.repoUrl.replace('https://github.com/', '').replace('.git', '');
-  console.log('Repo Path for StackBlitz:', repoPath);
-  const stackBlitzUrl = `https://stackblitz.com/github/${repoPath}?embed=1&file=README.md&terminal=1&view=editor`;
-  const stackBlitzForkUrl = `https://stackblitz.com/fork/github/${repoPath}`;
-  console.log('StackBlitz Embed URL:', stackBlitzUrl);
-   return (
+  // Use localhost code editor with repo URL - send message to iframe to autoclone
+  const localHostUrl = `http://localhost:8082/?folder=/home/coder`;
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+
+  useEffect(() => {
+    if (!data?.repoUrl) return;
+
+    // Function to post autoclone message to the iframe. We try a few times to handle timing.
+    const postAutoclone = () => {
+      const win = iframeRef.current?.contentWindow;
+      console.debug('[OutputPanel] autoclone: attempt, hasWindow=', !!win, 'repo=', data.repoUrl);
+      if (!win) return false;
+      try {
+        win.postMessage({ type: 'autoclone', repo: data.repoUrl }, '*');
+        console.debug('[OutputPanel] autoclone: posted message to iframe');
+        return true;
+      } catch (e) {
+        console.error('[OutputPanel] autoclone: postMessage failed', e);
+        return false;
+      }
+    };
+
+    // Listen for responses from the iframe (optional)
+    const onMessage = (ev: MessageEvent) => {
+      // You can refine origin checks here if desired
+      if (!ev.data || typeof ev.data !== 'object') return;
+      if (ev.data.type === 'autoclone-result') {
+        console.info('[OutputPanel] autoclone-result from iframe:', ev.data);
+      } else if (ev.data.type === 'autoclone-progress') {
+        console.debug('[OutputPanel] autoclone-progress:', ev.data);
+      }
+    };
+
+    window.addEventListener('message', onMessage);
+
+    // immediate attempt + retries
+    postAutoclone();
+    const t1 = setTimeout(postAutoclone, 400);
+    const t2 = setTimeout(postAutoclone, 1200);
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      window.removeEventListener('message', onMessage);
+    };
+  }, [data?.repoUrl]);
+
+  return (
     <div className="space-y-3">
       <div className="relative rounded-lg overflow-hidden border" style={{ height: '300px' }}>
         <iframe
-          src={stackBlitzUrl}
-          title="StackBlitz Preview"
+          ref={iframeRef}
+          src={localHostUrl}
+          title="Code Editor"
           className="w-full h-full"
-          allow="accelerometer; ambient-light-sensor; camera; encrypted-media; geolocation; gyroscope; hid; microphone; midi; payment; usb; vr; xr-spatial-tracking"
-          sandbox="allow-forms allow-modals allow-popups allow-presentation allow-same-origin allow-scripts"
+          sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-top-navigation"
         />
 
       </div>
 
       <div className="flex gap-2">
         <Button variant="outline" size="sm" asChild>
-          <a href={stackBlitzForkUrl} target="_blank" rel="noopener noreferrer">
-            Fork on StackBlitz <ExternalLink className="h-3 w-3 ml-1" />
-          </a>
-        </Button>
-
-        <Button variant="outline" size="sm" asChild>
           <a
             href={`vscode://vscode.git/clone?url=${encodeURIComponent(data.repoUrl)}`}
-            // keep same behavior as external links: open in new tab/window if possible
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -273,7 +307,7 @@ function EpicsOutput({ data }: { data?: { titles: string[]; ids?: string[]; jira
         </Button>
       </div>
     </div>
-   );
+  );
  }
  
  function IndividualToolOutput({
