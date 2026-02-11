@@ -53,7 +53,7 @@ import axios from 'axios';
         
         defaultLanguage: 'en',
         initialMessages: ['Hi there!',
-		'How can I assist you today?'],
+		'How can I assist you yesterday?'],
         i18n: {
           en: {
             title: '',
