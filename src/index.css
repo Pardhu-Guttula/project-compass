@@ -18,7 +18,8 @@ All colors MUST be HSL.
      --popover: 0 0% 100%;
      --popover-foreground: 222 47% 11%;
 
-     --primary: 217 91% 50%;
+     /* Brillio Deep Indigo replaces blue */
+     --primary: 252 51% 18%;
      --primary-foreground: 0 0% 100%;
 
      --secondary: 215 25% 95%;
@@ -27,28 +28,28 @@ All colors MUST be HSL.
      --muted: 214 20% 94%;
      --muted-foreground: 215 14% 45%;
 
-     --accent: 217 91% 95%;
-     --accent-foreground: 217 91% 40%;
+     --accent: 252 40% 92%;
+     --accent-foreground: 252 51% 18%;
 
      --destructive: 0 72% 51%;
-    --destructive-foreground: 210 40% 98%;
+     --destructive-foreground: 210 40% 98%;
 
      --border: 214 25% 90%;
      --input: 214 25% 90%;
-     --ring: 217 91% 50%;
+     --ring: 252 51% 18%;
 
-    --radius: 0.5rem;
+     --radius: 0.5rem;
 
      --sidebar-background: 0 0% 100%;
      --sidebar-foreground: 222 47% 11%;
-     --sidebar-primary: 217 91% 50%;
+     --sidebar-primary: 252 51% 18%;
      --sidebar-primary-foreground: 0 0% 100%;
-     --sidebar-accent: 217 91% 95%;
-     --sidebar-accent-foreground: 217 91% 40%;
+     --sidebar-accent: 252 40% 92%;
+     --sidebar-accent-foreground: 252 51% 18%;
      --sidebar-border: 214 25% 90%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
-     
-     --chart-1: 217 91% 50%;
+     --sidebar-ring: 252 51% 18%;
+
+     --chart-1: 252 51% 18%;
      --chart-2: 160 84% 39%;
      --chart-3: 262 83% 58%;
      --chart-4: 43 96% 56%;
@@ -66,7 +67,8 @@ All colors MUST be HSL.
      --popover: 222 47% 11%;
      --popover-foreground: 210 20% 98%;
 
-     --primary: 217 91% 60%;
+     /* Brillio Deep Indigo replaces blue */
+     --primary: 252 51% 28%;
      --primary-foreground: 0 0% 100%;
 
      --secondary: 217 33% 17%;
@@ -75,26 +77,26 @@ All colors MUST be HSL.
      --muted: 217 33% 17%;
      --muted-foreground: 215 20% 65%;
 
-     --accent: 217 91% 20%;
-     --accent-foreground: 217 91% 80%;
+     --accent: 252 51% 15%;
+     --accent-foreground: 252 40% 85%;
 
      --destructive: 0 63% 31%;
-    --destructive-foreground: 210 40% 98%;
+     --destructive-foreground: 210 40% 98%;
 
      --border: 217 33% 20%;
      --input: 217 33% 20%;
-     --ring: 217 91% 60%;
-     
+     --ring: 252 51% 28%;
+
      --sidebar-background: 222 47% 11%;
      --sidebar-foreground: 210 20% 98%;
-     --sidebar-primary: 217 91% 60%;
-    --sidebar-primary-foreground: 0 0% 100%;
-     --sidebar-accent: 217 91% 20%;
-     --sidebar-accent-foreground: 217 91% 80%;
+     --sidebar-primary: 252 51% 28%;
+     --sidebar-primary-foreground: 0 0% 100%;
+     --sidebar-accent: 252 51% 15%;
+     --sidebar-accent-foreground: 252 40% 85%;
      --sidebar-border: 217 33% 20%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
-     
-     --chart-1: 217 91% 60%;
+     --sidebar-ring: 252 51% 28%;
+
+     --chart-1: 252 51% 28%;
      --chart-2: 160 84% 50%;
      --chart-3: 262 83% 68%;
      --chart-4: 43 96% 66%;
@@ -109,5 +111,6 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground;
+    font-family: Arial, sans-serif;
   }
 }
