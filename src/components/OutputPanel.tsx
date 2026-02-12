@@ -230,7 +230,8 @@ function EpicsOutput({ data }: { data?: { titles: string[]; ids?: string[]; jira
    }
  
   // Use localhost code editor with repo URL - send message to iframe to autoclone
-  const localHostUrl = `http://localhost:8082/?folder=/home/coder`;
+  // const localHostUrl = `http://localhost:8081/?folder=/home/coder`;
+  const localHostUrl = `https://code-generation-server.eastus2.cloudapp.azure.com/f2126f2a-fb81-48ec-984e-251612e94a72`;
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
   useEffect(() => {
