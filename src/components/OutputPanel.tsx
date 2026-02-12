@@ -17,7 +17,7 @@ import {
   Minimize2
 } from 'lucide-react';
 import { getToolLabel } from '@/constants/tools';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 export function OutputPanel() {
   const dispatch = useAppDispatch();
@@ -51,7 +51,7 @@ export function OutputPanel() {
     }
   };
 
-  const toggleMaximize = (toolName, data) => {
+  const toggleMaximize= (toolName, data) => {
     if (maximizedCodeTool) {
       setMaximizedCodeTool(null);
     } else if (data) {
@@ -113,7 +113,7 @@ export function OutputPanel() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => handleRefresh()}
+            onClick={() => handleRefresh(maximizedCodeTool.tool)}
             disabled={loading}
           >
             {loading ? (
@@ -388,23 +388,26 @@ function ArchitectureOutput({ data }) {
 }
 
 function StackBlitzOutput({ data, fullHeight = false }) {
-  if (!data) return <p className="text-sm text-muted-foreground">No data found</p>;
+  const localHostUrl = `http://localhost:8082/?folder=/home/coder`;
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
-  const repoPath = data.repoUrl
-    .replace('https://github.com/', '')
-    .replace('.git', '');
-
-  const stackBlitzUrl = `https://stackblitz.com/github/${repoPath}?embed=1&file=README.md&terminal=1&view=editor`;
-  const stackBlitzForkUrl = `https://stackblitz.com/fork/github/${repoPath}`;
+  if (!data) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        No data found
+      </p>
+    );
+  }
 
   return (
-    <div className={`flex flex-col ${fullHeight ? 'h-full' : 'space-y-3'}`}>
+    <div className={`flex flex-col ${fullHeight ? "h-full" : "space-y-3"}`}>
       <div
         className="relative rounded-lg overflow-hidden border flex-1"
-        style={{ height: fullHeight ? '100%' : '300px' }}
+        style={{ height: fullHeight ? "100%" : "300px" }}
       >
         <iframe
-          src={stackBlitzUrl}
+          ref={iframeRef}
+          src={localHostUrl}
           className="w-full h-full"
           allow="accelerometer; camera; encrypted-media; geolocation; microphone; midi; usb; xr-spatial-tracking"
         />
@@ -412,13 +415,8 @@ function StackBlitzOutput({ data, fullHeight = false }) {
 
       {!fullHeight && (
         <div className="flex gap-2">
-          {/* <Button variant="outline" size="sm" asChild>
-            <a href={stackBlitzForkUrl} target="_blank">
-              Fork on StackBlitz
-            </a>
-          </Button> */}
           <Button variant="outline" size="sm" asChild>
-            <a href={data.repoUrl} target="_blank">
+            <a href={data.repoUrl} target="_blank" rel="noopener noreferrer">
               Open in GitHub
             </a>
           </Button>
@@ -427,6 +425,7 @@ function StackBlitzOutput({ data, fullHeight = false }) {
     </div>
   );
 }
+
 
 function IndividualToolOutput({ tool, outputs, loading }: { tool: string; outputs: any; loading: boolean }) {
   const isCodeTool = ['code_gen', 'cicd', 'test_cases', 'test_data'].includes(tool);
