@@ -231,7 +231,7 @@ function EpicsOutput({ data }: { data?: { titles: string[]; ids?: string[]; jira
  
   // Use localhost code editor with repo URL - send message to iframe to autoclone
   // const localHostUrl = `http://localhost:8081/?folder=/home/coder`;
-  const localHostUrl = `https://code-generation-server.eastus2.cloudapp.azure.com/f2126f2a-fb81-48ec-984e-251612e94a72`;
+  const localHostUrl = `https://code-generation-server.eastus2.cloudapp.azure.com/39d8a71c-e0aa-40d3-a4ce-e426e2a286c0`;
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
   useEffect(() => {
@@ -270,9 +270,23 @@ function EpicsOutput({ data }: { data?: { titles: string[]; ids?: string[]; jira
     const t1 = setTimeout(postAutoclone, 400);
     const t2 = setTimeout(postAutoclone, 1200);
 
+    // After autoclone attempts, send message to simulate Ctrl+` for opening terminal
+    const t3 = setTimeout(() => {
+      const win = iframeRef.current?.contentWindow;
+      if (win) {
+        try {
+          win.postMessage({ type: 'keypress', key: '`', ctrlKey: true }, '*');
+          console.debug('[OutputPanel] keypress ctrl+`: posted message to iframe');
+        } catch (e) {
+          console.error('[OutputPanel] keypress ctrl+`: postMessage failed', e);
+        }
+      }
+    }, 5000); // Increased delay to allow autoclone to complete and handle potential server load
+
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);
+      clearTimeout(t3);
       window.removeEventListener('message', onMessage);
     };
   }, [data?.repoUrl]);

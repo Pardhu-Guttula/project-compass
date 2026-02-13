@@ -1,6 +1,7 @@
- import type { Project, CreateProjectPayload } from '@/types';
+import type { Project, CreateProjectPayload, Session } from '@/types';
  import { mockProjects, delay } from '@/api/mockData';
  import axiosInstance from '@/api/axiosInstance';
+ import axios from 'axios';
  
  // N8N Webhook Configuration for CloudOptics
  const N8N_WEBHOOK_URL = 'https://cloudoptics-n8n.westcentralus.cloudapp.azure.com/webhook/create-workspace';
@@ -102,8 +103,57 @@
      }
    },
  
-   async selectProject(projectId: string): Promise<Project | null> {
-     await delay(300);
-     return projectsStore.find((p) => p.id === projectId) || null;
-   },
+  async startSession(repoUrl: string, sessionId: string): Promise<Session> {
+    try {
+      console.log('Starting session with payload:', { repo_url: repoUrl, session_id: sessionId });
+
+      // Use a separate axios instance for the start-session API
+      const sessionAxios = axios.create({
+        baseURL: 'http://9.234.203.92:5000',
+        timeout: 30000,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const response = await sessionAxios.post('/start-session', {
+        repo_url: repoUrl,
+        session_id: sessionId,
+      });
+      console.log('Start session API response:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to start session:', error);
+      throw error;
+    }
+  },
+
+  async selectProject(projectId: string): Promise<{ project: Project | null; session: Session | null }> {
+    await delay(300);
+    const project = projectsStore.find((p) => p.id === projectId) || null;
+    if (!project) {
+      return { project: null, session: null };
+    }
+    try {
+      // Retrieve sessionId from localStorage using the same key as in ChatPanel.tsx
+      const projectKey = projectId ? `n8n_session_id_${projectId}` : 'n8n_session_id';
+      let sessionId = localStorage.getItem(projectKey);
+      if (!sessionId) {
+        // Generate a new sessionId if not found (fallback)
+        sessionId = (typeof crypto !== 'undefined' && (crypto as any).randomUUID)
+          ? (crypto as any).randomUUID()
+          : `${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+        try {
+          localStorage.setItem(projectKey, sessionId);
+        } catch (e) {
+          // ignore storage errors
+        }
+      }
+      const session = await this.startSession(project.githubRepoUrl, sessionId);
+      return { project, session };
+    } catch (error) {
+      console.error('Failed to start session for project:', projectId, error);
+      return { project, session: null };
+    }
+  },
  };

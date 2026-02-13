@@ -84,6 +84,7 @@
  export interface ProjectsState {
    projects: Project[];
    selectedProject: Project | null;
+   selectedSession: Session | null;
    loading: boolean;
    error: string | null;
  }
@@ -99,4 +100,11 @@
  export interface ChatState {
    messages: ChatMessage[];
    loading: boolean;
+ }
+
+ // Session Types
+ export interface Session {
+   session_id: string;
+   iframe_url: string;
+   container_name: string;
  }

@@ -22,6 +22,7 @@ export default function ProjectWorkspace() {
   }, [dispatch]);
 
   const handleProjectClick = async (project: Project) => {
+    console.log('Selecting project:', project);
     await dispatch(selectProject(project.id));
     navigate('/chat');
   };
@@ -56,7 +57,7 @@ export default function ProjectWorkspace() {
                 </p>
               </div>
             </div>
-            <Button onClick={() => setDialogOpen(true)} className="transition-colors hover:bg-[#2CC84D] hover:bg-[#2CC84D]">
+            <Button onClick={() => setDialogOpen(true)} className="transition-colors hover:bg-[#413A64] hover:bg-[#413A64]">
                <Plus className="h-4 w-4 mr-2" />
                Create New
             </Button>
