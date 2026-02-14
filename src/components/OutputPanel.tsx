@@ -2,58 +2,137 @@ import { useAppSelector, useAppDispatch } from '@/store/hooks';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
 import { runOrchestrator, runTool } from '@/features/tools/toolsThunks';
-import { ExternalLink, RefreshCw, Loader2, FileText, Image as ImageIcon, Code } from 'lucide-react';
+import {
+  ExternalLink,
+  RefreshCw,
+  Loader2,
+  FileText,
+  Image as ImageIcon,
+  Code,
+  Eye,
+  Maximize2,
+  Minimize2,
+  Github,
+  Monitor,
+  SquareArrowOutUpRight
+} from 'lucide-react';
 import { getToolLabel } from '@/constants/tools';
-import { useEffect, useRef } from 'react';
+import { useRef, useState } from 'react';
 
 export function OutputPanel() {
   const dispatch = useAppDispatch();
   const { selectedTool, outputs, loading, loadingTool } = useAppSelector((state) => state.tools);
   const { selectedProject } = useAppSelector((state) => state.projects);
 
-  const handleRefresh = (tool?: string) => {
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewImage, setPreviewImage] = useState(null);
+  const [maximizedCodeTool, setMaximizedCodeTool] = useState(null);
+
+  const handleRefresh = (tool) => {
     if (!selectedProject) return;
-    const toolKey = tool || 'orchestrator';
-    sessionStorage.setItem(`n8n_last_dispatch_${toolKey}`, Date.now().toString());
+
     const payload = {
       projectId: selectedProject.id,
       usecase: selectedProject.usecase,
       projectName: selectedProject.projectName,
     };
+
     if (tool && tool !== 'orchestrator') {
-      dispatch(runTool({ tool: tool as any, payload }));
+      dispatch(runTool({ tool, payload }));
     } else {
       dispatch(runOrchestrator(payload));
     }
   };
 
+  const openPreview = (imageSource) => {
+    if (imageSource) {
+      setPreviewImage(imageSource);
+      setPreviewOpen(true);
+    }
+  };
+
+  const toggleMaximize= (toolName, data) => {
+    if (maximizedCodeTool) {
+      setMaximizedCodeTool(null);
+    } else if (data) {
+      setMaximizedCodeTool({ tool: toolName, data });
+    }
+  };
+
+  /* ================= Orchestrator View ================= */
+
   if (selectedTool === 'orchestrator') {
+    if (maximizedCodeTool) {
+      return (
+        <div className="flex flex-col h-full bg-background">
+          <div className="p-4 border-b flex items-center justify-between flex-shrink-0">
+            <h2 className="text-lg font-semibold">
+              {maximizedCodeTool.tool === 'code_gen' && 'Code Generation'}
+              {maximizedCodeTool.tool === 'cicd' && 'CI/CD'}
+              {maximizedCodeTool.tool === 'test_cases' && 'Test Cases'}
+              {maximizedCodeTool.tool === 'test_data' && 'Test Data'}
+            </h2>
+
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setMaximizedCodeTool(null)}
+              >
+                <Minimize2 className="h-4 w-4 mr-2" />
+                Close
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleRefresh(maximizedCodeTool.tool)}
+                disabled={loading}
+              >
+                {loading ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                )}
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-hidden">
+            <StackBlitzOutput data={maximizedCodeTool.data} fullHeight />
+          </div>
+        </div>
+      );
+    }
+
     return (
-      <div className="h-full flex flex-col">
-        <Card className="border-b rounded-none">
-          <CardHeader className="flex flex-row items-center justify-between py-3">
-            <CardTitle className="text-lg">Workflow Output</CardTitle>
-            <Button onClick={() => handleRefresh()} disabled={loading}>
-              {loading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4" />
-              )}
-              Run Workflow
-            </Button>
-          </CardHeader>
-        </Card>
-        <ScrollArea className="flex-1">
-          <div className="p-4 space-y-4">
-            {loading && (
-              <div className="space-y-2">
-                <Progress value={33} className="w-full" />
-                <p className="text-sm text-muted-foreground text-center">Running workflow...</p>
-              </div>
+      <div className="flex flex-col h-full bg-background">
+        <div className="p-4 border-b flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Workflow Output</h2>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleRefresh(maximizedCodeTool.tool)}
+            disabled={loading}
+          >
+            {loading ? (
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+            ) : (
+              <RefreshCw className="h-4 w-4 mr-2" />
             )}
+            Run Workflow
+          </Button>
+        </div>
+
+        {loading && (
+          <div className="px-4 py-2">
+            <Progress value={33} className="h-1" />
+          </div>
+        )}
+
+        <ScrollArea className="flex-1 p-4">
+          <div className="space-y-4">
             <OutputCard
               title="Epics & User Stories"
               icon={<FileText className="h-4 w-4" />}
@@ -67,249 +146,393 @@ export function OutputPanel() {
               icon={<ImageIcon className="h-4 w-4" />}
               loading={loadingTool === 'arch_gen'}
               onRefresh={() => handleRefresh('arch_gen')}
+              onViewImage={outputs.arch_gen?.image ? () => openPreview(outputs.arch_gen.image) : null}
             >
               <ArchitectureOutput data={outputs.arch_gen} />
             </OutputCard>
+
             <OutputCard
               title="Architecture Validation"
               icon={<ImageIcon className="h-4 w-4" />}
               loading={loadingTool === 'arch_val'}
               onRefresh={() => handleRefresh('arch_val')}
+              onViewImage={outputs.arch_val?.image ? () => openPreview(outputs.arch_val.image) : null}
             >
               <ArchitectureOutput data={outputs.arch_val} />
             </OutputCard>
+
             <OutputCard
-              title="Code Generation"
+              title="Code Base"
               icon={<Code className="h-4 w-4" />}
               loading={loadingTool === 'code_gen'}
               onRefresh={() => handleRefresh('code_gen')}
+              onMaximize={outputs.code_gen ? () => toggleMaximize('code_gen', outputs.code_gen) : null}
             >
-              <StackBlitzOutput data={outputs.code_gen} />
+              <StackBlitzOutput data={outputs.code_gen} isOrchestrator={true} />
             </OutputCard>
           </div>
         </ScrollArea>
+
+        {/* Image Modal */}
+        {previewOpen && previewImage && (
+          <div
+            className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center"
+            onClick={() => setPreviewOpen(false)}
+          >
+            <div
+              className="bg-white rounded-xl shadow-xl p-6 max-w-[85vw] max-h-[85vh]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <img
+                src={previewImage}
+                className="max-w-full max-h-[75vh] object-contain"
+              />
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  /* ================= Individual Tool View ================= */
+
+  const isCodeTool = ['code_gen', 'cicd', 'test_cases', 'test_data'].includes(selectedTool);
+
+  if (isCodeTool) {
+      const toolData = outputs[selectedTool];
+
+  const localHostUrl = `https://code-generation-server.eastus2.cloudapp.azure.com/39d8a71c-e0aa-40d3-a4ce-e426e2a286c0/`;
+
+  const handleOpenNewTab = () => {
+    window.open(localHostUrl, '_blank');
+  };
+
+  const handleOpenVSCode = () => {
+    const vscodeUrl = `vscode://file/home/coder`;
+    window.location.href = vscodeUrl;
+  };
+
+  const handleOpenGitHub = () => {
+    if (toolData?.repoUrl) {
+      window.open(toolData.repoUrl, '_blank');
+    }
+  };
+    return (
+      <div className="flex flex-col h-full bg-background">
+        <div className="p-4 border-b flex items-center justify-between flex-shrink-0">
+          <h2 className="text-lg font-semibold">{getToolLabel(selectedTool)}</h2>
+          <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleOpenNewTab}
+            title="Open in New Tab"
+          >
+          <SquareArrowOutUpRight className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleOpenVSCode}
+            title="Open in VS Code"
+          >
+          <Monitor className="h-4 w-4" />
+          </Button>
+          {toolData?.repoUrl && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleOpenGitHub}
+              title="Open in GitHub"
+            >
+              <Github className="h-4 w-4" />
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleRefresh(selectedTool)}
+            disabled={loading}
+          >
+            {loading ? (
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+            ) : (
+              <RefreshCw className="h-4 w-4 mr-2" />
+            )}
+          </Button>
+        </div>
+        </div>
+
+        <div className="flex-1 overflow-hidden">
+          <IndividualToolOutput
+            tool={selectedTool}
+            outputs={outputs}
+            loading={loading}
+          />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="h-full flex flex-col">
-      <Card className="border-b rounded-none">
-        <CardHeader className="flex flex-row items-center justify-between py-3">
-          <CardTitle className="text-lg">{getToolLabel(selectedTool)}</CardTitle>
-          <Button onClick={() => handleRefresh(selectedTool)} disabled={loading}>
+    <div className="flex flex-col h-full bg-background">
+      <div className="p-4 border-b flex items-center justify-between">
+        <h2 className="text-lg font-semibold">{getToolLabel(selectedTool)}</h2>
+
+        <div className="flex items-center gap-2">
+          {(selectedTool === 'arch_gen' || selectedTool === 'arch_val') && (
+            <Button size="sm" variant="secondary" onClick={() => {
+              const img = selectedTool === 'arch_gen' 
+                ? outputs.arch_gen?.image 
+                : outputs.arch_val?.image;
+              openPreview(img);
+            }}>
+              View image
+            </Button>
+          )}
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleRefresh(selectedTool)}
+            disabled={loading}
+          >
             {loading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
             ) : (
-              <RefreshCw className="h-4 w-4" />
+              <RefreshCw className="h-4 w-4 mr-2" />
             )}
-            Update
           </Button>
-        </CardHeader>
-      </Card>
-      <ScrollArea className="flex-1">
-        <div className="p-4">
-          <IndividualToolOutput tool={selectedTool} outputs={outputs} loading={loading} />
         </div>
+      </div>
+
+      <ScrollArea className="flex-1 p-4">
+        <IndividualToolOutput
+          tool={selectedTool}
+          outputs={outputs}
+          loading={loading}
+        />
       </ScrollArea>
+
+      {/* Image Modal */}
+      {previewOpen && previewImage && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center"
+          onClick={() => setPreviewOpen(false)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-xl p-6 max-w-[85vw] max-h-[85vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={previewImage}
+              className="max-w-full max-h-[75vh] object-contain"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-/* ---------- Shared UI Cards ---------- */
-function OutputCard({ title, icon, children, loading, onRefresh }: any) {
+/* ================= Sub Components ================= */
+
+function OutputCard({ title, icon, children, loading, onRefresh, onViewImage, onMaximize }) {
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between py-3">
-        <div className="flex items-center gap-2">
-          {icon}
-          <CardTitle className="text-base">{title}</CardTitle>
-        </div>
-        {onRefresh && (
-          <Button onClick={onRefresh} variant="ghost" size="sm" disabled={loading}>
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-          </Button>
-        )}
-      </CardHeader>
-      <CardContent>
-        {loading ? (
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-3/4" />
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm font-medium flex items-center gap-2">
+            {icon}
+            {title}
+          </CardTitle>
+          <div className="flex items-center gap-2">
+            {onViewImage && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7"
+                onClick={onViewImage}
+              >
+                <Eye className="h-3 w-3 mr-1" />
+                View image
+              </Button>
+            )}
+            {onMaximize && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7"
+                onClick={onMaximize}
+              >
+                <Maximize2 className="h-3 w-3 mr-1" />
+              </Button>
+            )}
+            {onRefresh && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={onRefresh}
+                disabled={loading}
+              >
+                {loading ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-3 w-3" />
+                )}
+              </Button>
+            )}
           </div>
-        ) : children}
-      </CardContent>
+        </div>
+      </CardHeader>
+      <CardContent className="pt-0">{children}</CardContent>
     </Card>
   );
 }
 
-/* ---------- Outputs ---------- */
-function EpicsOutput({ data }: any) {
-  if (!data) return <p className="text-sm text-muted-foreground">No data found</p>;
-
-  //const projectKey = selectedProject?.id ? `n8n_session_id_${selectedProject.id}` : 'n8n_session_id';
+function EpicsOutput({ data }: { data?: { titles: string[]; ids?: string[]; jiraUrl: string } }) {
+  if (!data || !data.titles || data.titles.length === 0) {
+    return <p className="text-sm text-muted-foreground">No data found</p>;
+  }
 
   return (
-    <div className="space-y-2">
-      {data.titles.slice(0, 2).map((title: string, i: number) => (
-        <div key={i} className="p-2 border rounded">
-          {data.ids?.[i] && (
-            <p className="text-xs text-muted-foreground">{data.ids[i]}</p>
-          )}
-          <p className="text-sm font-medium">{title}</p>
+    <div className="space-y-3">
+      {data.titles.slice(0,2).map((title: string, i: number) => (
+        <div key={i} className="p-3 bg-muted rounded-lg">
+          <p className="text-sm font-medium">
+            {data.ids?.[i] && (
+              <span className="text-primary font-semibold mr-2">{data.ids[i]}</span>
+            )}
+            {title}
+          </p>
         </div>
       ))}
-      <Button variant="link" size="sm" asChild>
-        <a href="#">
-          View More in JIRA
-          <ExternalLink className="h-3 w-3 ml-1" />
-        </a>
-      </Button>
+      {data.jiraUrl && (
+        <Button variant="link" size="sm" className="p-0 h-auto" asChild>
+          <a href={data.jiraUrl} target="_blank" rel="noopener noreferrer">
+            View in JIRA <ExternalLink className="h-3 w-3 ml-1" />
+          </a>
+        </Button>
+      )}
     </div>
   );
 }
 
-function ArchitectureOutput({ data }: any) {
-  if (!data?.image) return <p className="text-sm text-muted-foreground">No architecture available.</p>;
+function ArchitectureOutput({ data }) {
+  if (!data?.image)
+    return <p className="text-sm text-muted-foreground">No data found</p>;
 
   return (
-    <div className="space-y-2">
-      <img src={data.image} alt="Architecture" className="w-full rounded border" />
+    <div className="relative h-[320px] rounded-lg overflow-hidden border bg-muted">
+      <img src={data.image} className="w-full h-full object-contain" />
     </div>
   );
 }
 
-/* ---------- Code iframe ---------- */
+function StackBlitzOutput({ data, fullHeight = false, isOrchestrator = false}) {
+  const localHostUrl = `https://code-generation-server.eastus2.cloudapp.azure.com/39d8a71c-e0aa-40d3-a4ce-e426e2a286c0/`;
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
-/* ---------- Code iframe ---------- */
-function StackBlitzOutput({ data }: any) {
-  if (!data) return <p className="text-sm text-muted-foreground">No data found</p>;
+  if (!data) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        No data found
+      </p>
+    );
+  }
 
-  const { selectedProject } = useAppSelector((state) => state.projects);
-  const sessionId = selectedProject?.id 
-    ? localStorage.getItem(`n8n_session_id_${selectedProject.id}`) 
-    : null;
-  
-  if (!sessionId) return <p className="text-sm text-muted-foreground">No session found</p>;
-  
-  const localHostUrl = `https://code-generation-server.eastus2.cloudapp.azure.com/${sessionId}`;
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-
-  const handleIframeLoad = () => {
-    // Wait for iframe to fully load, then try to open terminal
-    setTimeout(() => {
-      try {
-        const iframe = iframeRef.current;
-        if (!iframe || !iframe.contentWindow) return;
-
-        // Focus the iframe first
-        iframe.contentWindow.focus();
-
-        // Try to dispatch a keyboard event directly
-        const ctrlBacktickEvent = new KeyboardEvent('keydown', {
-          key: '`',
-          code: 'Backquote',
-          ctrlKey: true,
-          bubbles: true,
-          cancelable: true,
-        });
-
-        iframe.contentWindow.document.dispatchEvent(ctrlBacktickEvent);
-        console.log('Terminal shortcut dispatched');
-      } catch (error) {
-        console.error('Error opening terminal:', error);
-      }
-    }, 3000);
-
-    // Try multiple times
-    setTimeout(() => {
-      try {
-        const iframe = iframeRef.current;
-        if (!iframe || !iframe.contentWindow) return;
-        iframe.contentWindow.focus();
-        const ctrlBacktickEvent = new KeyboardEvent('keydown', {
-          key: '`',
-          code: 'Backquote',
-          ctrlKey: true,
-          bubbles: true,
-          cancelable: true,
-        });
-        iframe.contentWindow.document.dispatchEvent(ctrlBacktickEvent);
-        console.log('Terminal shortcut dispatched - Attempt 2');
-      } catch (error) {
-        console.error('Error opening terminal:', error);
-      }
-    }, 5000);
+  const handleOpenNewTab = () => {
+    window.open(localHostUrl, '_blank');
   };
 
-  useEffect(() => {
-    if (!data.repoUrl) return;
+  const handleOpenVSCode = () => {
+    const vscodeUrl = `vscode://file/home/coder`;
+    window.location.href = vscodeUrl;
+  };
 
-    const postAutoclone = () => {
-      const win = iframeRef.current?.contentWindow;
-      if (!win) return false;
-      win.postMessage({ type: 'autoclone', repo: data.repoUrl }, '*');
-      return true;
-    };
+  const handleOpenGitHub = () => {
+    if (data.repoUrl) {
+      window.open(data.repoUrl, '_blank');
+    }
+  };
 
-    postAutoclone();
-    const t1 = setTimeout(postAutoclone, 400);
-    const t2 = setTimeout(postAutoclone, 1200);
-
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-    };
-  }, [data.repoUrl]);
 
   return (
-    <div className="space-y-4">
-      <div className="w-full h-[600px] border rounded overflow-hidden">
+    <div className={`flex flex-col ${fullHeight ? "h-full" : "space-y-3"}`}>
+      <div
+        className="relative rounded-lg overflow-hidden border bg-muted"
+        style={{
+  height: fullHeight
+    ? "100%"
+    : isOrchestrator
+    ? "320px"
+    : "300px",
+  minHeight: isOrchestrator ? "320px" : undefined,
+}}
+      >
         <iframe
           ref={iframeRef}
           src={localHostUrl}
           className="w-full h-full"
-          allow="cross-origin-isolated"
-          onLoad={handleIframeLoad}
+          allow="accelerometer; camera; encrypted-media; geolocation; microphone; midi; usb; xr-spatial-tracking"
         />
       </div>
-      <div className="flex gap-2">
-        <Button variant="outline" size="sm" asChild>
-          <a href={`vscode://vscode.git/clone?url=${encodeURIComponent(data.repoUrl)}`}>
-            Open in VS Code
-            <ExternalLink className="h-3 w-3 ml-1" />
-          </a>
-        </Button>
-        <Button variant="outline" size="sm" asChild>
-          <a href={data.repoUrl}>
-            Open in GitHub
-            <ExternalLink className="h-3 w-3 ml-1" />
-          </a>
-        </Button>
-      </div>
+      
+
+      {!fullHeight && (
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleOpenNewTab}
+            title="Open in New Tab"
+          >
+          <SquareArrowOutUpRight className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleOpenVSCode}
+            title="Open in VS Code"
+          >
+          <Monitor className="h-4 w-4" />
+          </Button>
+
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleOpenGitHub}
+              title="Open in GitHub"
+            >
+              <Github className="h-4 w-4" />
+            </Button>
+        </div>
+      )}
     </div>
   );
 }
-/* ---------- Individual Tool ---------- */
-function IndividualToolOutput({ tool, outputs, loading }: any) {
-  if (loading) {
-    return (
-      <div className="space-y-4">
-        <Skeleton className="h-8 w-1/2" />
-        <Skeleton className="h-32 w-full" />
-      </div>
-    );
-  }
 
+
+function IndividualToolOutput({ tool, outputs, loading }: { tool: string; outputs: any; loading: boolean }) {
+  const isCodeTool = ['code_gen', 'cicd', 'test_cases', 'test_data'].includes(tool);
+  
   switch (tool) {
     case 'epics':
       return <EpicsOutput data={outputs.epics_and_user_stories} />;
     case 'arch_gen':
+      return <ArchitectureOutput data={outputs.arch_gen} />;
     case 'arch_val':
-      return <ArchitectureOutput data={outputs[tool]} />;
+      return <ArchitectureOutput data={outputs.arch_val} />;
     case 'code_gen':
-      return <StackBlitzOutput data={outputs.code_gen} />;
+      return <StackBlitzOutput data={outputs.code_gen} fullHeight={isCodeTool} />;
+    case 'cicd':
+      return <StackBlitzOutput data={outputs.cicd} fullHeight={isCodeTool} />;
+    case 'test_cases':
+      return <StackBlitzOutput data={outputs.test_cases} fullHeight={isCodeTool} />;
+    case 'test_data':
+      return <StackBlitzOutput data={outputs.test_data} fullHeight={isCodeTool} />;
     default:
-      return <p className="text-sm text-muted-foreground">Select a tool</p>;
+      return <p className="text-sm text-muted-foreground">Select a tool to view output</p>;
   }
 }
