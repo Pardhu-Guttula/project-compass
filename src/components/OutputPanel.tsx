@@ -11,10 +11,12 @@ import {
   FileText,
   Image as ImageIcon,
   Code,
-  X,
   Eye,
   Maximize2,
-  Minimize2
+  Minimize2,
+  Github,
+  Monitor,
+  SquareArrowOutUpRight
 } from 'lucide-react';
 import { getToolLabel } from '@/constants/tools';
 import { useRef, useState } from 'react';
@@ -62,7 +64,6 @@ export function OutputPanel() {
   /* ================= Orchestrator View ================= */
 
   if (selectedTool === 'orchestrator') {
-    // If a code tool is maximized, show only that tool
     if (maximizedCodeTool) {
       return (
         <div className="flex flex-col h-full bg-background">
@@ -105,7 +106,6 @@ export function OutputPanel() {
       );
     }
 
-    // Normal orchestrator view
     return (
       <div className="flex flex-col h-full bg-background">
         <div className="p-4 border-b flex items-center justify-between">
@@ -169,7 +169,7 @@ export function OutputPanel() {
               onRefresh={() => handleRefresh('code_gen')}
               onMaximize={outputs.code_gen ? () => toggleMaximize('code_gen', outputs.code_gen) : null}
             >
-              <StackBlitzOutput data={outputs.code_gen} />
+              <StackBlitzOutput data={outputs.code_gen} isOrchestrator={true} />
             </OutputCard>
           </div>
         </ScrollArea>
@@ -197,15 +197,58 @@ export function OutputPanel() {
 
   /* ================= Individual Tool View ================= */
 
-  // Special layout for code generation tools to maximize iframe space
   const isCodeTool = ['code_gen', 'cicd', 'test_cases', 'test_data'].includes(selectedTool);
 
   if (isCodeTool) {
+      const toolData = outputs[selectedTool];
+
+  const localHostUrl = `https://code-generation-server.eastus2.cloudapp.azure.com/39d8a71c-e0aa-40d3-a4ce-e426e2a286c0/`;
+
+  const handleOpenNewTab = () => {
+    window.open(localHostUrl, '_blank');
+  };
+
+  const handleOpenVSCode = () => {
+    const vscodeUrl = `vscode://file/home/coder`;
+    window.location.href = vscodeUrl;
+  };
+
+  const handleOpenGitHub = () => {
+    if (toolData?.repoUrl) {
+      window.open(toolData.repoUrl, '_blank');
+    }
+  };
     return (
       <div className="flex flex-col h-full bg-background">
         <div className="p-4 border-b flex items-center justify-between flex-shrink-0">
           <h2 className="text-lg font-semibold">{getToolLabel(selectedTool)}</h2>
-
+          <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleOpenNewTab}
+            title="Open in New Tab"
+          >
+          <SquareArrowOutUpRight className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleOpenVSCode}
+            title="Open in VS Code"
+          >
+          <Monitor className="h-4 w-4" />
+          </Button>
+          {toolData?.repoUrl && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleOpenGitHub}
+              title="Open in GitHub"
+            >
+              <Github className="h-4 w-4" />
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -218,6 +261,7 @@ export function OutputPanel() {
               <RefreshCw className="h-4 w-4 mr-2" />
             )}
           </Button>
+        </div>
         </div>
 
         <div className="flex-1 overflow-hidden">
@@ -343,7 +387,7 @@ function OutputCard({ title, icon, children, loading, onRefresh, onViewImage, on
           </div>
         </div>
       </CardHeader>
-      <CardContent>{children}</CardContent>
+      <CardContent className="pt-0">{children}</CardContent>
     </Card>
   );
 }
@@ -387,8 +431,8 @@ function ArchitectureOutput({ data }) {
   );
 }
 
-function StackBlitzOutput({ data, fullHeight = false }) {
-  const localHostUrl = `http://localhost:8082/?folder=/home/coder`;
+function StackBlitzOutput({ data, fullHeight = false, isOrchestrator = false}) {
+  const localHostUrl = `https://code-generation-server.eastus2.cloudapp.azure.com/39d8a71c-e0aa-40d3-a4ce-e426e2a286c0/`;
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
   if (!data) {
@@ -399,11 +443,34 @@ function StackBlitzOutput({ data, fullHeight = false }) {
     );
   }
 
+  const handleOpenNewTab = () => {
+    window.open(localHostUrl, '_blank');
+  };
+
+  const handleOpenVSCode = () => {
+    const vscodeUrl = `vscode://file/home/coder`;
+    window.location.href = vscodeUrl;
+  };
+
+  const handleOpenGitHub = () => {
+    if (data.repoUrl) {
+      window.open(data.repoUrl, '_blank');
+    }
+  };
+
+
   return (
     <div className={`flex flex-col ${fullHeight ? "h-full" : "space-y-3"}`}>
       <div
-        className="relative rounded-lg overflow-hidden border flex-1"
-        style={{ height: fullHeight ? "100%" : "300px" }}
+        className="relative rounded-lg overflow-hidden border bg-muted"
+        style={{
+  height: fullHeight
+    ? "100%"
+    : isOrchestrator
+    ? "320px"
+    : "300px",
+  minHeight: isOrchestrator ? "320px" : undefined,
+}}
       >
         <iframe
           ref={iframeRef}
@@ -412,14 +479,35 @@ function StackBlitzOutput({ data, fullHeight = false }) {
           allow="accelerometer; camera; encrypted-media; geolocation; microphone; midi; usb; xr-spatial-tracking"
         />
       </div>
+      
 
       {!fullHeight && (
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" asChild>
-            <a href={data.repoUrl} target="_blank" rel="noopener noreferrer">
-              Open in GitHub
-            </a>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleOpenNewTab}
+            title="Open in New Tab"
+          >
+          <SquareArrowOutUpRight className="h-4 w-4" />
           </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleOpenVSCode}
+            title="Open in VS Code"
+          >
+          <Monitor className="h-4 w-4" />
+          </Button>
+
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleOpenGitHub}
+              title="Open in GitHub"
+            >
+              <Github className="h-4 w-4" />
+            </Button>
         </div>
       )}
     </div>

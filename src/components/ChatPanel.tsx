@@ -7,28 +7,50 @@ import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { setSelectedTool } from '@/features/tools/toolsSlice';
 import { getWebhookUrl } from '@/constants/tools';
 import { runOrchestrator, runTool } from '@/features/tools/toolsThunks';
+import { useNavigate } from 'react-router-dom';
+
+const SESSION_EXPIRATION_MS = 60 * 60 * 1000;
 
 export function ChatPanel() {
   const dispatch = useAppDispatch();
+  const navigate = useNavigate();
   const { selectedTool } = useAppSelector((state) => state.tools);
   const { selectedProject } = useAppSelector((state) => state.projects);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    // Use a per-project session id stored in localStorage under `n8n_session_id_<projectId>`.
-    // Fallback to a global `n8n_session_id` if no project id is available (backwards compatibility).
     const projectKey = selectedProject?.id ? `n8n_session_id_${selectedProject.id}` : 'n8n_session_id';
+    const timestampKey = selectedProject?.id ? `n8n_session_timestamp_${selectedProject.id}` : 'n8n_session_timestamp';
+    
     let sessionId = localStorage.getItem(projectKey);
+    let sessionTimestamp = localStorage.getItem(timestampKey);
+
+    const now = Date.now();
+    if (sessionId && sessionTimestamp) {
+      const timestamp = parseInt(sessionTimestamp, 10);
+      const timeSinceCreation = now - timestamp;
+      
+      if (timeSinceCreation >= SESSION_EXPIRATION_MS) {
+        console.log('Session expired. Redirecting to projects workspace...');
+
+        localStorage.removeItem(projectKey);
+        localStorage.removeItem(timestampKey);
+        navigate('/'); 
+        return;
+      }
+    }
+
     if (!sessionId) {
-      // generate UUID-like id (use crypto.randomUUID when available)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       sessionId = (typeof crypto !== 'undefined' && (crypto as any).randomUUID)
         ? (crypto as any).randomUUID()
         : `${Date.now()}-${Math.floor(Math.random() * 100000)}`;
       try {
         localStorage.setItem(projectKey, sessionId);
+        localStorage.setItem(timestampKey, now.toString());
+        console.log(' New session created:', sessionId);
       } catch (e) {
-        // ignore storage errors (quota, private mode)
+
+        console.error('Failed to save session:', e);
       }
     }
 
@@ -36,7 +58,6 @@ export function ChatPanel() {
 
     if (!containerRef.current) return;
 
-    // Clear any previous mount
     containerRef.current.innerHTML = '';
     containerRef.current.style.position = 'relative';
     containerRef.current.style.width = '100%';
@@ -68,11 +89,26 @@ export function ChatPanel() {
       loadPreviousSession: true,
     });
 
-    // detection helpers
+    const expirationCheckInterval = setInterval(() => {
+      const currentTimestamp = localStorage.getItem(timestampKey);
+      if (currentTimestamp) {
+        const timestamp = parseInt(currentTimestamp, 10);
+        const elapsed = Date.now() - timestamp;
+        
+        if (elapsed >= SESSION_EXPIRATION_MS) {
+          console.log('Session expired during check. Redirecting...');
+          localStorage.removeItem(projectKey);
+          localStorage.removeItem(timestampKey);
+          clearInterval(expirationCheckInterval);
+          navigate('/');
+        }
+      }
+    }, 60000); 
+
     let lastBotMessageTime = 0;
     let lastBotMessageHash = '';
     const MIN_API_CALL_INTERVAL = 2000;
-    const TOOL_DISPATCH_COOLDOWN = 2000; // Prevent duplicate dispatch calls within 2 seconds
+    const TOOL_DISPATCH_COOLDOWN = 2000;
 
     const textHash = (s: string) => {
       if (!s) return '';
@@ -115,8 +151,7 @@ export function ChatPanel() {
 
     const handleBotMessage = async () => {
       if (!selectedProject) return;
-      
-      // Check if we've dispatched this tool recently (within cooldown) using sessionStorage
+
       const toolKey = selectedTool || 'orchestrator';
       const lastDispatchStr = sessionStorage.getItem(`n8n_last_dispatch_${toolKey}`);
       const lastDispatchTime = lastDispatchStr ? parseInt(lastDispatchStr, 10) : 0;
@@ -126,8 +161,6 @@ export function ChatPanel() {
         console.log(`⏳ Tool dispatch cooldown active for ${toolKey}. Skipping observer-triggered call.`);
         return;
       }
-      
-      // Update the last dispatch time for this tool in sessionStorage
       sessionStorage.setItem(`n8n_last_dispatch_${toolKey}`, now.toString());
       
       const payload = { projectId: selectedProject.id, usecase: selectedProject.usecase, projectName: selectedProject.projectName };
@@ -135,12 +168,12 @@ export function ChatPanel() {
       if (selectedTool === 'orchestrator') {
         const result = await dispatch(runOrchestrator(payload));
         if ((result as any)?.meta?.requestStatus === 'fulfilled') {
-          console.log('✅ Orchestrator completed');
+          console.log(' Orchestrator completed');
         }
       } else {
         const result = await dispatch(runTool({ tool: selectedTool as any, payload }));
         if ((result as any)?.meta?.requestStatus === 'fulfilled') {
-          console.log('✅ Tool run completed:', selectedTool);
+          console.log(' Tool run completed:', selectedTool);
         }
       }
     };
@@ -151,7 +184,6 @@ export function ChatPanel() {
 
       if (!targetContainer) return null;
 
-      // Snapshot existing bot messages on mount to avoid reacting to restored history
       try {
         const existingNodes = Array.from(
           targetContainer.querySelectorAll('.n8n-chat__message, [data-message-type], [data-author], [data-role], [role="article"]')
@@ -170,10 +202,7 @@ export function ChatPanel() {
           lastBotMessageTime = Date.now();
         }
       } catch (e) {
-        // ignore snapshot errors
       }
-
-      // Short grace period to ignore burst mutations caused by initial load
       const IGNORE_INITIAL_MS = 1500;
       const ignoreInitialUntil = Date.now() + IGNORE_INITIAL_MS;
 
@@ -192,7 +221,6 @@ export function ChatPanel() {
               if (!text) continue;
 
               const now = Date.now();
-              // ignore mutations happening in the initial grace period
               if (now < ignoreInitialUntil) continue;
 
               const hash = textHash(text);
@@ -202,7 +230,7 @@ export function ChatPanel() {
               lastBotMessageTime = now;
               lastBotMessageHash = hash;
 
-              console.log('🤖 Bot message detected. Tool:', selectedTool);
+              console.log('Bot message detected. Tool:', selectedTool);
               await handleBotMessage();
             }
           }
@@ -216,10 +244,12 @@ export function ChatPanel() {
     };
 
     observerCleanup = setupObserver();
+  
     return () => {
       if (observerCleanup) observerCleanup();
+      clearInterval(expirationCheckInterval);
     };
-  }, [selectedProject, selectedTool, dispatch]);
+  }, [selectedProject, selectedTool, dispatch, navigate]);
 
   return (
     <div className="flex flex-col h-full bg-card border-r">
