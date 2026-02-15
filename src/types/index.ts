@@ -29,6 +29,12 @@ export interface CreateProjectPayload {
   jiraProject?: string;
 }
 
+export interface Session {
+  id?: string;
+  sessionId?: string;
+  [key: string]: any;
+}
+
 export type ToolType =
   | 'orchestrator'
   | 'epics'

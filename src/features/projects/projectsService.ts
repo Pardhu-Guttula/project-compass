@@ -126,28 +126,51 @@ export const projectsService = {
     }
   },
 
+  /**
+   * Ensures a sessionId exists in localStorage for the given project.
+   * If no sessionId exists, generates a new one and stores it.
+   * This function should be called BEFORE any API calls that require a sessionId.
+   */
+  async ensureSessionId(projectId: string): Promise<string> {
+    const projectKey = projectId ? `n8n_session_id_${projectId}` : 'n8n_session_id';
+    let sessionId = localStorage.getItem(projectKey);
+    
+    if (!sessionId) {
+      // Generate a new sessionId if not found
+      sessionId = (typeof crypto !== 'undefined' && (crypto as any).randomUUID)
+        ? (crypto as any).randomUUID()
+        : `${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+      
+      // Store in localStorage FIRST - before any API calls
+      try {
+        localStorage.setItem(projectKey, sessionId);
+        console.log('Session ID created and stored in localStorage:', sessionId);
+      } catch (e) {
+        console.error('Failed to save session ID to localStorage:', e);
+      }
+    } else {
+      console.log('Existing session ID found in localStorage:', sessionId);
+    }
+    
+    return sessionId;
+  },
+
   async selectProject(projectId: string): Promise<{ project: Project | null; session: Session | null }> {
     await delay(300);
     const project = projectsStore.find((p) => p.id === projectId) || null;
     if (!project) {
       return { project: null, session: null };
     }
+    
     try {
-      // Retrieve sessionId from localStorage using the same key as in ChatPanel.tsx
-      const projectKey = projectId ? `n8n_session_id_${projectId}` : 'n8n_session_id';
-      let sessionId = localStorage.getItem(projectKey);
-      if (!sessionId) {
-        // Generate a new sessionId if not found (fallback)
-        sessionId = (typeof crypto !== 'undefined' && (crypto as any).randomUUID)
-          ? (crypto as any).randomUUID()
-          : `${Date.now()}-${Math.floor(Math.random() * 100000)}`;
-        try {
-          localStorage.setItem(projectKey, sessionId);
-        } catch (e) {
-          // ignore storage errors
-        }
-      }
+      // FIRST: Ensure sessionId exists in localStorage before calling any API
+      // This ensures the sessionId is stored in localStorage BEFORE the API is called
+      const sessionId = await this.ensureSessionId(projectId);
+      
       console.log('Selected project:', project);
+      console.log('Calling startSession API with sessionId:', sessionId);
+      
+      // Now call the API AFTER the sessionId is confirmed to be in localStorage
       const session = await this.startSession(project.githubRepoUrl, sessionId);
       return { project, session };
     } catch (error) {
