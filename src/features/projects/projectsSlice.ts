@@ -1,5 +1,5 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
- import type { ProjectsState, Project, Session } from '@/types';
+ import type { ProjectsState, Project } from '@/types';
  import { fetchProjects, createProject, selectProject } from './projectsThunks';
  
  const initialState: ProjectsState = {

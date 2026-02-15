@@ -27,6 +27,4 @@ import { createAsyncThunk } from '@reduxjs/toolkit';
    async (projectId: string) => {
      return await projectsService.selectProject(projectId);
    }
-
-  
  );

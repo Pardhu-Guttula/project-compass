@@ -7,8 +7,9 @@ export interface Project {
   projectType: ProjectType;
   users: string[];
   githubRepoName?: string;
-  githubOwnerName?: string;
   jiraBoard?: string;
+  githubOwnerName?: string;
+  githubRepoUrl?: string;
   jiraAccessToken?: string;
   githubAccessToken?: string;
   jiraProject?: string;

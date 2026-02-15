@@ -10,6 +10,7 @@ import type { Project, CreateProjectPayload, Session } from '@/types';
 let projectsStore: Project[] = [...mockProjects];
 
 function transformApiResponse(apiProject: any): Project {
+  console.log('Transforming API project data:', apiProject);
   const uniqueId = apiProject.project_name 
     ? `${apiProject.project_name}-${apiProject.created_at || Date.now()}`
     : Date.now().toString();
@@ -24,6 +25,7 @@ function transformApiResponse(apiProject: any): Project {
       : apiProject.access_users || [],
     githubRepoName: apiProject.repo_name || '',
     githubOwnerName: apiProject.repo_owner || '',
+    githubRepoUrl: apiProject.repo_link || '',
     jiraBoard: apiProject.jira_board || '',
     jiraProject: apiProject.jira_project || '',
     createdAt: apiProject.created_at || new Date().toISOString(),
@@ -37,6 +39,7 @@ export const projectsService = {
         email,
       });
       const apiData = response.data;
+      console.log('Fetched projects from API:', apiData);
       const projects: Project[] = Array.isArray(apiData) 
         ? apiData.map((project: any) => transformApiResponse(project))
         : [transformApiResponse(apiData)];
@@ -144,6 +147,7 @@ export const projectsService = {
           // ignore storage errors
         }
       }
+      console.log('Selected project:', project);
       const session = await this.startSession(project.githubRepoUrl, sessionId);
       return { project, session };
     } catch (error) {

@@ -199,68 +199,81 @@ export function OutputPanel() {
   const isCodeTool = ['code_gen', 'cicd', 'test_cases', 'test_data'].includes(selectedTool);
 
   if (isCodeTool) {
-      const toolData = outputs[selectedTool];
+    const toolData = outputs[selectedTool];
+    
+    const sessionId = selectedProject?.id 
+      ? localStorage.getItem(`n8n_session_id_${selectedProject.id}`) 
+      : null;
 
-  const localHostUrl = `https://code-generation-server.eastus2.cloudapp.azure.com/39d8a71c-e0aa-40d3-a4ce-e426e2a286c0/`;
-
-  const handleOpenNewTab = () => {
-    window.open(localHostUrl, '_blank');
-  };
-
-  const handleOpenVSCode = () => {
-    const vscodeUrl = `vscode://file/home/coder`;
-    window.location.href = vscodeUrl;
-  };
-
-  const handleOpenGitHub = () => {
-    if (toolData?.repoUrl) {
-      window.open(toolData.repoUrl, '_blank');
+    if (!sessionId) {
+      return (
+        <div className="flex flex-col h-full bg-background items-center justify-center">
+          <p className="text-sm text-muted-foreground">No session found</p>
+        </div>
+      );
     }
-  };
+
+    const localHostUrl = `https://code-generation-server.eastus2.cloudapp.azure.com/${sessionId}/`;
+
+    const handleOpenNewTab = () => {
+      window.open(localHostUrl, '_blank');
+    };
+
+    const handleOpenVSCode = () => {
+      const vscodeUrl = `vscode://file/home/coder`;
+      window.location.href = vscodeUrl;
+    };
+
+    const handleOpenGitHub = () => {
+      if (toolData?.repoUrl) {
+        window.open(toolData.repoUrl, '_blank');
+      }
+    };
+
     return (
       <div className="flex flex-col h-full bg-background">
         <div className="p-4 border-b flex items-center justify-between flex-shrink-0">
           <h2 className="text-lg font-semibold">{getToolLabel(selectedTool)}</h2>
           <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleOpenNewTab}
-            title="Open in New Tab"
-          >
-          <SquareArrowOutUpRight className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleOpenVSCode}
-            title="Open in VS Code"
-          >
-          <Monitor className="h-4 w-4" />
-          </Button>
-          {toolData?.repoUrl && (
             <Button
               variant="ghost"
               size="icon"
-              onClick={handleOpenGitHub}
-              title="Open in GitHub"
+              onClick={handleOpenNewTab}
+              title="Open in New Tab"
             >
-              <Github className="h-4 w-4" />
+              <SquareArrowOutUpRight className="h-4 w-4" />
             </Button>
-          )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handleRefresh(selectedTool)}
-            disabled={loading}
-          >
-            {loading ? (
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
-            ) : (
-              <RefreshCw className="h-4 w-4 mr-2" />
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleOpenVSCode}
+              title="Open in VS Code"
+            >
+              <Monitor className="h-4 w-4" />
+            </Button>
+            {toolData?.repoUrl && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleOpenGitHub}
+                title="Open in GitHub"
+              >
+                <Github className="h-4 w-4" />
+              </Button>
             )}
-          </Button>
-        </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleRefresh(selectedTool)}
+              disabled={loading}
+            >
+              {loading ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <RefreshCw className="h-4 w-4 mr-2" />
+              )}
+            </Button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-hidden">
@@ -431,7 +444,20 @@ function ArchitectureOutput({ data }) {
 }
 
 function StackBlitzOutput({ data, fullHeight = false, isOrchestrator = false}) {
-  const localHostUrl = `https://code-generation-server.eastus2.cloudapp.azure.com/39d8a71c-e0aa-40d3-a4ce-e426e2a286c0/`;
+  const { selectedProject } = useAppSelector((state) => state.projects);
+  const sessionId = selectedProject?.id 
+    ? localStorage.getItem(`n8n_session_id_${selectedProject.id}`) 
+    : null;
+
+  if (!sessionId) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        No session found
+      </p>
+    );
+  }
+
+  const localHostUrl = `https://code-generation-server.eastus2.cloudapp.azure.com/${sessionId}/`;
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
   if (!data) {
@@ -463,13 +489,13 @@ function StackBlitzOutput({ data, fullHeight = false, isOrchestrator = false}) {
       <div
         className="relative rounded-lg overflow-hidden border bg-muted"
         style={{
-  height: fullHeight
-    ? "100%"
-    : isOrchestrator
-    ? "320px"
-    : "300px",
-  minHeight: isOrchestrator ? "320px" : undefined,
-}}
+          height: fullHeight
+            ? "100%"
+            : isOrchestrator
+            ? "320px"
+            : "300px",
+          minHeight: isOrchestrator ? "320px" : undefined,
+        }}
       >
         <iframe
           ref={iframeRef}
@@ -488,7 +514,7 @@ function StackBlitzOutput({ data, fullHeight = false, isOrchestrator = false}) {
             onClick={handleOpenNewTab}
             title="Open in New Tab"
           >
-          <SquareArrowOutUpRight className="h-4 w-4" />
+            <SquareArrowOutUpRight className="h-4 w-4" />
           </Button>
           <Button
             variant="ghost"
@@ -496,17 +522,17 @@ function StackBlitzOutput({ data, fullHeight = false, isOrchestrator = false}) {
             onClick={handleOpenVSCode}
             title="Open in VS Code"
           >
-          <Monitor className="h-4 w-4" />
+            <Monitor className="h-4 w-4" />
           </Button>
 
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleOpenGitHub}
-              title="Open in GitHub"
-            >
-              <Github className="h-4 w-4" />
-            </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleOpenGitHub}
+            title="Open in GitHub"
+          >
+            <Github className="h-4 w-4" />
+          </Button>
         </div>
       )}
     </div>
