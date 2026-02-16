@@ -1,0 +1,94 @@
+name: ADAM SDLC Standalone UI Deployment
+ 
+on:
+  push:
+    branches:
+      - deploy
+ 
+env:
+  IMAGE_TAG: latest
+  ACR_NAME: appmodstandaloneregistry 
+  IMAGE_NAME: sdlc-ui
+  RESOURCE_GROUP: pardhu
+  # WEB_APP_NAME: app-modernization
+
+permissions:
+  id-token: write
+  contents: read
+ 
+jobs: 
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: '{"clientId":"107b84ac-30d5-45ed-a349-80657408cfe5","clientSecret":"pEb8Q~VNdBzvVIlsNlPWaur3Vqrswc3MVqMPAbfN","subscriptionId":"5977daf7-9b05-4c2f-aaa7-33d8dfc7b153","tenantId":"3882b70d-a91e-468c-9928-820358bfbd73"}'
+
+      # Set up Node.js environment
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+
+      # Install dependencies (React project)
+      - name: Install dependencies
+        run: |
+          npm install
+
+      - name: Install Azure CLI
+        run: |
+          curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+          
+      # Step 3: Retrieve ACR Credentials
+      - name: Get ACR Credentials
+        run: |
+          export ACR_USERNAME=$(az acr credential show --name ${{ env.ACR_NAME }} --query "username" -o tsv)
+          export ACR_PASSWORD=$(az acr credential show --name ${{ env.ACR_NAME }} --query "passwords[0].value" -o tsv)
+          echo "ACR_USERNAME=$ACR_USERNAME" >> $GITHUB_ENV
+          echo "ACR_PASSWORD=$ACR_PASSWORD" >> $GITHUB_ENV
+
+      # Step 4: Docker Login to ACR
+      - name: Docker Login to ACR
+        run: docker login $ACR_NAME.azurecr.io -u $ACR_USERNAME -p $ACR_PASSWORD
+ 
+      # Step 2: Build the Docker image
+      - name: Build Docker image
+        run: |
+          docker build \
+            -t ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} .
+          docker push ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+      
+      # - name: Deploy to Azure Web App
+      #   run: |
+      #     az webapp config container set \
+      #       --name ${{ env.WEB_APP_NAME }} \
+      #       --resource-group ${{ env.RESOURCE_GROUP }} \
+      #       --docker-custom-image-name ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} \
+      #       --docker-registry-server-password $ACR_PASSWORD \
+      #       --docker-registry-server-url https://${{ env.ACR_NAME }}.azurecr.io \
+      #       --docker-registry-server-user $ACR_USERNAME
+
+      #     # Configure app settings (environment variables)
+      #     az webapp config appsettings set \
+      #         --name ${{ env.WEB_APP_NAME }} \
+      #         --resource-group ${{ env.RESOURCE_GROUP }}  \
+      #         --settings VITE_APP_MOD_DEPLOY_PAT="${{ secrets.VITE_APP_MOD_DEPLOY_PAT }}" \
+      #                     SKIP_PREFLIGHT_CHECK="${{ secrets.SKIP_PREFLIGHT_CHECK }}" \
+      #                     BROWSER="${{ secrets.BROWSER }}" \
+      #                     VITE_APP_BASE_URL="${{ secrets.VITE_APP_BASE_URL }}" \
+      #                     VITE_APP_DEPLOY_USER="${{ secrets.VITE_APP_DEPLOY_USER }}" \
+      #                     VITE_APP_AZURE_DEPLOY_REPOSITORY="${{ secrets.VITE_APP_AZURE_DEPLOY_REPOSITORY }}" \
+      #                     VITE_APP_AZURE_DEPLOY_REPOSITORY_REHOST="${{ secrets.VITE_APP_AZURE_DEPLOY_REPOSITORY_REHOST }}" \
+      #                     VITE_APP_AZURE_DEPLOY_REPOSITORY_REPLATFORM="${{ secrets.VITE_APP_AZURE_DEPLOY_REPOSITORY_REPLATFORM }}" \
+      #                     VITE_APP_AWS_DEPLOY_REPOSITORY="${{ secrets.VITE_APP_AWS_DEPLOY_REPOSITORY }}" \
+      #                     VITE_APP_AWS_DEPLOY_REPOSITORY_REHOST="${{ secrets.VITE_APP_AWS_DEPLOY_REPOSITORY_REHOST }}" \
+      #                     VITE_APP_AWS_DEPLOY_REPOSITORY_REPLATFORM="${{ secrets.VITE_APP_AWS_DEPLOY_REPOSITORY_REPLATFORM }}" \
+      #                     VITE_APP_GCP_DEPLOY_REPOSITORY="${{ secrets.VITE_APP_GCP_DEPLOY_REPOSITORY }}" \
+      #                     VITE_APP_AWS_REGION="${{ secrets.VITE_APP_AWS_REGION }}" \
+      #                     VITE_APP_VITEAPPENCRYPTIONKEY="${{ secrets.VITE_APP_VITEAPPENCRYPTIONKEY }}" \
+      #                     VITE_KEY_VAULT_ENC_KEY="${{ secrets.VITE_KEY_VAULT_ENC_KEY }}" \
