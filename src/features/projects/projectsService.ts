@@ -107,7 +107,7 @@ export const projectsService = {
 
       // Use a separate axios instance for the start-session API
       const sessionAxios = axios.create({
-        baseURL: 'https://code-generation-server.eastus2.cloudapp.azure.com:5000',
+        baseURL: '/api',
         timeout: 30000,
         headers: {
           'Content-Type': 'application/json',
