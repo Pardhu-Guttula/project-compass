@@ -13,7 +13,7 @@ import axios from 'axios';
 const SESSION_EXPIRATION_MS = 60 * 60 * 1000;
 
 // Session API base URL
-const SESSION_API_BASE_URL = 'http://9.234.203.92:5000';
+const SESSION_API_BASE_URL = 'https://code-generation-server.eastus2.cloudapp.azure.com:5000';
 
 // Helper function to stop session via API
 const stopSession = async (sessionId: string) => {
