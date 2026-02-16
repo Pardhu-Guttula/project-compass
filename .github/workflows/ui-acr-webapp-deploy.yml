@@ -10,7 +10,7 @@ env:
   ACR_NAME: appmodstandaloneregistry 
   IMAGE_NAME: sdlc-ui
   RESOURCE_GROUP: pardhu
-  # WEB_APP_NAME: app-modernization
+  WEB_APP_NAME: adam-sdlc
 
 permissions:
   id-token: write
@@ -63,32 +63,14 @@ jobs:
             -t ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} .
           docker push ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
       
-      # - name: Deploy to Azure Web App
-      #   run: |
-      #     az webapp config container set \
-      #       --name ${{ env.WEB_APP_NAME }} \
-      #       --resource-group ${{ env.RESOURCE_GROUP }} \
-      #       --docker-custom-image-name ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} \
-      #       --docker-registry-server-password $ACR_PASSWORD \
-      #       --docker-registry-server-url https://${{ env.ACR_NAME }}.azurecr.io \
-      #       --docker-registry-server-user $ACR_USERNAME
+      - name: Deploy to Azure Web App
+        run: |
+          az webapp config container set \
+            --name ${{ env.WEB_APP_NAME }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --docker-custom-image-name ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} \
+            --docker-registry-server-password $ACR_PASSWORD \
+            --docker-registry-server-url https://${{ env.ACR_NAME }}.azurecr.io \
+            --docker-registry-server-user $ACR_USERNAME
 
-      #     # Configure app settings (environment variables)
-      #     az webapp config appsettings set \
-      #         --name ${{ env.WEB_APP_NAME }} \
-      #         --resource-group ${{ env.RESOURCE_GROUP }}  \
-      #         --settings VITE_APP_MOD_DEPLOY_PAT="${{ secrets.VITE_APP_MOD_DEPLOY_PAT }}" \
-      #                     SKIP_PREFLIGHT_CHECK="${{ secrets.SKIP_PREFLIGHT_CHECK }}" \
-      #                     BROWSER="${{ secrets.BROWSER }}" \
-      #                     VITE_APP_BASE_URL="${{ secrets.VITE_APP_BASE_URL }}" \
-      #                     VITE_APP_DEPLOY_USER="${{ secrets.VITE_APP_DEPLOY_USER }}" \
-      #                     VITE_APP_AZURE_DEPLOY_REPOSITORY="${{ secrets.VITE_APP_AZURE_DEPLOY_REPOSITORY }}" \
-      #                     VITE_APP_AZURE_DEPLOY_REPOSITORY_REHOST="${{ secrets.VITE_APP_AZURE_DEPLOY_REPOSITORY_REHOST }}" \
-      #                     VITE_APP_AZURE_DEPLOY_REPOSITORY_REPLATFORM="${{ secrets.VITE_APP_AZURE_DEPLOY_REPOSITORY_REPLATFORM }}" \
-      #                     VITE_APP_AWS_DEPLOY_REPOSITORY="${{ secrets.VITE_APP_AWS_DEPLOY_REPOSITORY }}" \
-      #                     VITE_APP_AWS_DEPLOY_REPOSITORY_REHOST="${{ secrets.VITE_APP_AWS_DEPLOY_REPOSITORY_REHOST }}" \
-      #                     VITE_APP_AWS_DEPLOY_REPOSITORY_REPLATFORM="${{ secrets.VITE_APP_AWS_DEPLOY_REPOSITORY_REPLATFORM }}" \
-      #                     VITE_APP_GCP_DEPLOY_REPOSITORY="${{ secrets.VITE_APP_GCP_DEPLOY_REPOSITORY }}" \
-      #                     VITE_APP_AWS_REGION="${{ secrets.VITE_APP_AWS_REGION }}" \
-      #                     VITE_APP_VITEAPPENCRYPTIONKEY="${{ secrets.VITE_APP_VITEAPPENCRYPTIONKEY }}" \
-      #                     VITE_KEY_VAULT_ENC_KEY="${{ secrets.VITE_KEY_VAULT_ENC_KEY }}" \
+          
