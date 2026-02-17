@@ -8,8 +8,27 @@ import { setSelectedTool } from '@/features/tools/toolsSlice';
 import { getWebhookUrl } from '@/constants/tools';
 import { runOrchestrator, runTool } from '@/features/tools/toolsThunks';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 
-const SESSION_EXPIRATION_MS = 60 * 60 * 1000; 
+const SESSION_EXPIRATION_MS = 1 * 60 * 1000;
+
+const SESSION_API_BASE_URL = 'http://9.234.203.92:5000';
+
+
+const stopSession = async (sessionId: string) => {
+  try {
+    console.log('Stopping session:', sessionId);
+    await axios.post(`${SESSION_API_BASE_URL}/stop-session/${sessionId}`, {}, {
+      timeout: 10000,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    console.log(' Session stopped successfully:', sessionId);
+  } catch (error) {
+    console.error('Failed to stop session:', error);
+  }
+};
 
 interface ChatPanelProps {
   width: number;
@@ -23,47 +42,92 @@ export function ChatPanel({ width, onResize }: ChatPanelProps) {
   const { selectedProject } = useAppSelector((state) => state.projects);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const resizeRef = useRef<HTMLDivElement>(null);
+  const currentSessionIdRef = useRef<string | null>(null);
+  const expirationTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const hasExpiredRef = useRef(false); 
 
   useEffect(() => {
-    const projectKey = selectedProject?.id ? `n8n_session_id_${selectedProject.id}` : 'n8n_session_id';
-    const timestampKey = selectedProject?.id ? `n8n_session_timestamp_${selectedProject.id}` : 'n8n_session_timestamp';
-  
+
+    hasExpiredRef.current = false;
+
+    const projectKey = selectedProject?.id
+      ? `n8n_session_id_${selectedProject.id}`
+      : 'n8n_session_id';
+    const timestampKey = selectedProject?.id
+      ? `n8n_session_timestamp_${selectedProject.id}`
+      : 'n8n_session_timestamp';
+
     let sessionId = localStorage.getItem(projectKey);
     let sessionTimestamp = localStorage.getItem(timestampKey);
-
     const now = Date.now();
-    
 
     if (sessionId && sessionTimestamp) {
-      const timestamp = parseInt(sessionTimestamp, 10);
-      const timeSinceCreation = now - timestamp;
-      
-      if (timeSinceCreation >= SESSION_EXPIRATION_MS) {
-        console.log(' Session expired. Clearing old session and redirecting to projects workspace...');
-
+      const elapsed = now - parseInt(sessionTimestamp, 10);
+      if (elapsed >= SESSION_EXPIRATION_MS) {
+        console.log(' Session already expired on mount. Cleaning up and redirecting...');
+        const expiredId = sessionId;
         localStorage.removeItem(projectKey);
         localStorage.removeItem(timestampKey);
-
-        navigate('/'); 
+        currentSessionIdRef.current = null;
+        stopSession(expiredId).finally(() => navigate('/'));
         return;
-      } else {
-        console.log(` Session valid. Time remaining: ${Math.floor((SESSION_EXPIRATION_MS - timeSinceCreation) / 1000)} seconds`);
       }
+      console.log(
+        ` Resuming existing session. Time remaining: ${Math.floor(
+          (SESSION_EXPIRATION_MS - elapsed) / 1000
+        )}s`
+      );
     }
 
+    // --- Create new session if none exists ---
     if (!sessionId) {
-      sessionId = (typeof crypto !== 'undefined' && (crypto as any).randomUUID)
-        ? (crypto as any).randomUUID()
-        : `${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+      sessionId =
+        typeof crypto !== 'undefined' && (crypto as any).randomUUID
+          ? (crypto as any).randomUUID()
+          : `${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+
       try {
         localStorage.setItem(projectKey, sessionId);
         localStorage.setItem(timestampKey, now.toString());
-        console.log('🆕 New session created:', sessionId);
-        console.log('⏱️ Session will expire in:', SESSION_EXPIRATION_MS / 1000, 'seconds');
+        console.log(' New session created:', sessionId);
       } catch (e) {
-        console.error(' Failed to save session:', e);
+        console.error(' Failed to save session to localStorage:', e);
       }
     }
+
+    currentSessionIdRef.current = sessionId;
+    console.log('Tracking session ID:', sessionId);
+
+    // --- Single expiration handler ---
+    const handleSessionExpired = async () => {
+      if (hasExpiredRef.current) return;
+      hasExpiredRef.current = true;
+
+      console.log('Session expired. Stopping session and redirecting...');
+
+      const sessionToStop = currentSessionIdRef.current;
+      currentSessionIdRef.current = null;
+
+      localStorage.removeItem(projectKey);
+      localStorage.removeItem(timestampKey);
+
+      if (sessionToStop) {
+        await stopSession(sessionToStop);
+      }
+
+      navigate('/');
+    };
+
+    const storedTimestamp = localStorage.getItem(timestampKey);
+    const createdAt = storedTimestamp ? parseInt(storedTimestamp, 10) : now;
+    const elapsed = now - createdAt;
+    const remainingMs = Math.max(0, SESSION_EXPIRATION_MS - elapsed);
+
+    console.log(` Session expires in ${Math.floor(remainingMs / 1000)} seconds`);
+
+    expirationTimerRef.current = setTimeout(() => {
+      handleSessionExpired();
+    }, remainingMs);
 
     const webhookUrl = getWebhookUrl((selectedTool as any) || 'orchestrator');
 
@@ -100,29 +164,7 @@ export function ChatPanel({ width, onResize }: ChatPanelProps) {
       loadPreviousSession: true,
     });
 
-    const expirationCheckInterval = setInterval(() => {
-      const currentTimestamp = localStorage.getItem(timestampKey);
-      if (currentTimestamp) {
-        const timestamp = parseInt(currentTimestamp, 10);
-        const elapsed = Date.now() - timestamp;
-
-        const timeRemaining = Math.floor((SESSION_EXPIRATION_MS - elapsed) / 1000);
-        console.log(`Session check - Time remaining: ${timeRemaining} seconds`);
-        
-        if (elapsed >= SESSION_EXPIRATION_MS) {
-          console.log('Session expired during periodic check. Redirecting...');
-          localStorage.removeItem(projectKey);
-          localStorage.removeItem(timestampKey);
-          clearInterval(expirationCheckInterval);
-          navigate('/');
-        }
-      } else {
-        console.log('⚠️ Session not found. Redirecting...');
-        clearInterval(expirationCheckInterval);
-        navigate('/');
-      }
-    }, 10000);
-
+    // --- Bot message observer ---
     let lastBotMessageTime = 0;
     let lastBotMessageHash = '';
     const MIN_API_CALL_INTERVAL = 2000;
@@ -136,24 +178,32 @@ export function ChatPanel({ width, onResize }: ChatPanelProps) {
 
     const findMessageElement = (el: HTMLElement | null) => {
       if (!el) return null;
-      return el.closest('.n8n-chat__message, [data-message-type], [data-author], [data-role], [role="article"]') as HTMLElement | null;
+      return el.closest(
+        '.n8n-chat__message, [data-message-type], [data-author], [data-role], [role="article"]'
+      ) as HTMLElement | null;
     };
 
     const isBotMessageElement = (msgEl: HTMLElement | null) => {
       if (!msgEl) return false;
+
       const cls = (msgEl.className || '').toString().toLowerCase();
       const dataAuthor = (msgEl.getAttribute('data-author') || '').toLowerCase();
       const dataRole = (msgEl.getAttribute('data-role') || '').toLowerCase();
 
       if (dataAuthor === 'bot' || dataAuthor === 'assistant') return true;
       if (dataRole === 'assistant' || dataRole === 'bot') return true;
-
       if (cls.includes('bot') || cls.includes('assistant')) return true;
       if (cls.includes('user') || cls.includes('you')) return false;
 
-      const authorChild = msgEl.querySelector('[data-author], [data-role], .author, .message-author');
+      const authorChild = msgEl.querySelector(
+        '[data-author], [data-role], .author, .message-author'
+      );
       if (authorChild) {
-        const aAuth = (authorChild.getAttribute('data-author') || authorChild.getAttribute('data-role') || '').toLowerCase();
+        const aAuth = (
+          authorChild.getAttribute('data-author') ||
+          authorChild.getAttribute('data-role') ||
+          ''
+        ).toLowerCase();
         if (aAuth.includes('assistant') || aAuth.includes('bot')) return true;
         if (aAuth.includes('user') || aAuth.includes('you')) return false;
       }
@@ -165,24 +215,27 @@ export function ChatPanel({ width, onResize }: ChatPanelProps) {
       return false;
     };
 
-    let observerCleanup: (() => void) | null = null;
-
     const handleBotMessage = async () => {
       if (!selectedProject) return;
 
       const toolKey = selectedTool || 'orchestrator';
       const lastDispatchStr = sessionStorage.getItem(`n8n_last_dispatch_${toolKey}`);
       const lastDispatchTime = lastDispatchStr ? parseInt(lastDispatchStr, 10) : 0;
-      const now = Date.now();
-      
-      if (now - lastDispatchTime < TOOL_DISPATCH_COOLDOWN) {
-        console.log(`Tool dispatch cooldown active for ${toolKey}. Skipping observer-triggered call.`);
+      const nowMs = Date.now();
+
+      if (nowMs - lastDispatchTime < TOOL_DISPATCH_COOLDOWN) {
+        console.log(`⏳ Tool dispatch cooldown active for ${toolKey}. Skipping.`);
         return;
       }
-      sessionStorage.setItem(`n8n_last_dispatch_${toolKey}`, now.toString());
-      
-      const payload = { projectId: selectedProject.id, usecase: selectedProject.usecase, projectName: selectedProject.projectName };
-      
+
+      sessionStorage.setItem(`n8n_last_dispatch_${toolKey}`, nowMs.toString());
+
+      const payload = {
+        projectId: selectedProject.id,
+        usecase: selectedProject.usecase,
+        projectName: selectedProject.projectName,
+      };
+
       if (selectedTool === 'orchestrator') {
         const result = await dispatch(runOrchestrator(payload));
         if ((result as any)?.meta?.requestStatus === 'fulfilled') {
@@ -191,20 +244,25 @@ export function ChatPanel({ width, onResize }: ChatPanelProps) {
       } else {
         const result = await dispatch(runTool({ tool: selectedTool as any, payload }));
         if ((result as any)?.meta?.requestStatus === 'fulfilled') {
-          console.log(' Tool run completed:', selectedTool);
+          console.log('Tool run completed:', selectedTool);
         }
       }
     };
 
+    let observerCleanup: (() => void) | null = null;
+
     const setupObserver = () => {
-      const messagesContainer = containerRef.current?.querySelector('.n8n-chat-messages-container');
+      const messagesContainer =
+        containerRef.current?.querySelector('.n8n-chat-messages-container');
       const targetContainer = messagesContainer || containerRef.current;
 
       if (!targetContainer) return null;
 
       try {
         const existingNodes = Array.from(
-          targetContainer.querySelectorAll('.n8n-chat__message, [data-message-type], [data-author], [data-role], [role="article"]')
+          targetContainer.querySelectorAll(
+            '.n8n-chat__message, [data-message-type], [data-author], [data-role], [role="article"]'
+          )
         ) as HTMLElement[];
 
         let lastHashFromExisting = '';
@@ -222,7 +280,7 @@ export function ChatPanel({ width, onResize }: ChatPanelProps) {
       } catch (e) {
         console.error('Error processing existing messages:', e);
       }
-      
+
       const IGNORE_INITIAL_MS = 1500;
       const ignoreInitialUntil = Date.now() + IGNORE_INITIAL_MS;
 
@@ -230,7 +288,10 @@ export function ChatPanel({ width, onResize }: ChatPanelProps) {
         try {
           for (const mutation of mutations) {
             if (mutation.type !== 'childList') continue;
-            const addedElements = Array.from(mutation.addedNodes).filter((n: any) => n.nodeType === 1) as HTMLElement[];
+
+            const addedElements = Array.from(mutation.addedNodes).filter(
+              (n: any) => n.nodeType === 1
+            ) as HTMLElement[];
 
             for (const el of addedElements) {
               const msgEl = findMessageElement(el) || el;
@@ -240,34 +301,41 @@ export function ChatPanel({ width, onResize }: ChatPanelProps) {
               const text = (msgEl.textContent || '').trim();
               if (!text) continue;
 
-              const now = Date.now();
-              if (now < ignoreInitialUntil) continue;
+              const nowMs = Date.now();
+              if (nowMs < ignoreInitialUntil) continue;
 
               const hash = textHash(text);
               if (hash === lastBotMessageHash) continue;
-              if (now - lastBotMessageTime < MIN_API_CALL_INTERVAL) continue;
+              if (nowMs - lastBotMessageTime < MIN_API_CALL_INTERVAL) continue;
 
-              lastBotMessageTime = now;
+              lastBotMessageTime = nowMs;
               lastBotMessageHash = hash;
 
-              console.log('Bot message detected. Tool:', selectedTool);
+              console.log('🤖 Bot message detected. Tool:', selectedTool);
               await handleBotMessage();
             }
           }
         } catch (error) {
-          console.error(' Error in messages observer:', error);
+          console.error('Error in messages observer:', error);
         }
       });
 
-      observer.observe(targetContainer, { childList: true, subtree: true });
+      observer.observe(targetContainer, {
+        childList: true,
+        subtree: true,
+      });
+
       return () => observer.disconnect();
     };
 
     observerCleanup = setupObserver();
-  
+
     return () => {
       if (observerCleanup) observerCleanup();
-      clearInterval(expirationCheckInterval);
+      if (expirationTimerRef.current) {
+        clearTimeout(expirationTimerRef.current);
+        expirationTimerRef.current = null;
+      }
     };
   }, [selectedProject, selectedTool, dispatch, navigate]);
 
@@ -308,25 +376,26 @@ export function ChatPanel({ width, onResize }: ChatPanelProps) {
   }, [onResize]);
 
   return (
-    <div 
-      className="flex flex-col h-full bg-card border-r relative" 
-      style={{ 
-        width: `${width}px`, 
+    <div
+      className="flex flex-col h-full bg-card border-r relative"
+      style={{
+        width: `${width}px`,
         minWidth: `${width}px`,
         maxWidth: `${width}px`,
-        flexShrink: 0 
+        flexShrink: 0,
       }}
     >
       <div className="p-4 border-b">
         <label className="text-sm font-medium text-muted-foreground mb-2 block">Select Tool</label>
-        <ToolSelector value={selectedTool} onChange={(tool) => dispatch(setSelectedTool(tool))} disabled={false} />
+        <ToolSelector
+          value={selectedTool}
+          onChange={(tool) => dispatch(setSelectedTool(tool))}
+          disabled={false}
+        />
       </div>
 
       <div id="n8n-chat-container" ref={containerRef} className="flex-1 overflow-hidden relative" />
-      <div
-        ref={resizeRef}
-        className="resize-handle"
-      />
+      <div ref={resizeRef} className="resize-handle" />
     </div>
   );
 }

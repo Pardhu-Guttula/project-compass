@@ -24,8 +24,8 @@ export function ProjectCard({ project, onClick }: ProjectCardProps) {
         hover:shadow-[0_20px_60px_rgba(0,0,0,0.12)]
         hover:border-primary/50
         hover:-translate-y-1
-        hover:scale-[1.03]
-        "
+        hover:scale-[1.02]
+      "
       onClick={() => onClick(project)}
     >
       <CardHeader>

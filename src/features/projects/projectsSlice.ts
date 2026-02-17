@@ -1,10 +1,11 @@
- import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+import { createSlice, PayloadAction } from '@reduxjs/toolkit';
  import type { ProjectsState, Project } from '@/types';
  import { fetchProjects, createProject, selectProject } from './projectsThunks';
  
  const initialState: ProjectsState = {
    projects: [],
    selectedProject: null,
+   selectedSession: null,
    loading: false,
    error: null,
  };
@@ -15,6 +16,7 @@
    reducers: {
      clearSelectedProject: (state) => {
        state.selectedProject = null;
+       state.selectedSession = null;
      },
      clearError: (state) => {
        state.error = null;
@@ -57,9 +59,10 @@
        .addCase(selectProject.pending, (state) => {
          state.loading = true;
        })
-       .addCase(selectProject.fulfilled, (state, action: PayloadAction<Project | null>) => {
+       .addCase(selectProject.fulfilled, (state, action: PayloadAction<{ project: Project | null; session: Session | null }>) => {
          state.loading = false;
-         state.selectedProject = action.payload;
+         state.selectedProject = action.payload.project;
+         state.selectedSession = action.payload.session;
        })
        .addCase(selectProject.rejected, (state, action) => {
          state.loading = false;

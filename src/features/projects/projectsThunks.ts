@@ -1,5 +1,5 @@
- import { createAsyncThunk } from '@reduxjs/toolkit';
- import type { CreateProjectPayload } from '@/types';
+import { createAsyncThunk } from '@reduxjs/toolkit';
+ import type { CreateProjectPayload, Session } from '@/types';
  import { projectsService } from './projectsService';
  
  export const fetchProjects = createAsyncThunk(

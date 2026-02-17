@@ -7,7 +7,8 @@ import { CreateProjectDialog } from '@/components/CreateProjectDialog';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { fetchProjects, createProject, selectProject } from '@/features/projects/projectsThunks';
 import type { Project, CreateProjectPayload } from '@/types';
-import { Plus, FolderKanban } from 'lucide-react';
+//import { Plus, circuitboard } from 'lucide-react';
+import { Plus, CircuitBoard } from 'lucide-react';
 
 export default function ProjectWorkspace() {
   const dispatch = useAppDispatch();
@@ -21,6 +22,7 @@ export default function ProjectWorkspace() {
   }, [dispatch]);
 
   const handleProjectClick = async (project: Project) => {
+    console.log('Selecting project:', project);
     await dispatch(selectProject(project.id));
     navigate('/chat');
   };
@@ -46,20 +48,21 @@ export default function ProjectWorkspace() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-lg bg-primary flex items-center justify-center">
-                <FolderKanban className="h-6 w-6 text-primary-foreground" />
+                <CircuitBoard className="h-6 w-6 text-primary-foreground" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-foreground">SDLC Workspace</h1>
+                <h1 className="text-2xl font-bold text-foreground"> Engineering LifeCycle</h1>
                 <p className="text-sm text-muted-foreground">
                   Manage your software development projects
                 </p>
               </div>
             </div>
-
-            <Button onClick={() => setDialogOpen(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Create New
+            <Button onClick={() => setDialogOpen(true)} className="transition-colors hover:bg-[#413A64] hover:bg-[#413A64]">
+               <Plus className="h-4 w-4 mr-2" />
+               Create New
             </Button>
+
+            
           </div>
         </div>
       </header>
@@ -89,7 +92,7 @@ export default function ProjectWorkspace() {
           </div>
         ) : projects.length === 0 ? (
           <div className="text-center py-16 font-[Arial,sans-serif]">
-            <FolderKanban className="h-16 w-16 mx-auto text-muted-foreground/50 mb-4" />
+            <CircuitBoard className="h-16 w-16 mx-auto text-muted-foreground/50 mb-4" />
             <h2 className="text-xl font-semibold text-foreground mb-2">
               No projects yet
             </h2>

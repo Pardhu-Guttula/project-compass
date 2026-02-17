@@ -141,7 +141,6 @@ export function OutputPanel() {
             >
               <EpicsOutput data={outputs.epics_and_user_stories} />
             </OutputCard>
-
             <OutputCard
               title="Architecture Generation"
               icon={<ImageIcon className="h-4 w-4" />}
@@ -201,8 +200,20 @@ export function OutputPanel() {
 
   if (isCodeTool) {
     const toolData = outputs[selectedTool];
+    
+    const sessionId = selectedProject?.id 
+      ? localStorage.getItem(`n8n_session_id_${selectedProject.id}`) 
+      : null;
 
-    const localHostUrl = `https://code-generation-server.eastus2.cloudapp.azure.com/39d8a71c-e0aa-40d3-a4ce-e426e2a286c0/`;
+    if (!sessionId) {
+      return (
+        <div className="flex flex-col h-full bg-background items-center justify-center">
+          <p className="text-sm text-muted-foreground">No session found</p>
+        </div>
+      );
+    }
+
+    const localHostUrl = `https://code-generation-server.eastus2.cloudapp.azure.com/${sessionId}/`;
 
     const handleOpenNewTab = () => {
       window.open(localHostUrl, '_blank');
@@ -433,7 +444,20 @@ function ArchitectureOutput({ data }) {
 }
 
 function StackBlitzOutput({ data, fullHeight = false, isOrchestrator = false}) {
-  const localHostUrl = `https://code-generation-server.eastus2.cloudapp.azure.com/39d8a71c-e0aa-40d3-a4ce-e426e2a286c0/`;
+  const { selectedProject } = useAppSelector((state) => state.projects);
+  const sessionId = selectedProject?.id 
+    ? localStorage.getItem(`n8n_session_id_${selectedProject.id}`) 
+    : null;
+
+  if (!sessionId) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        No session found
+      </p>
+    );
+  }
+
+  const localHostUrl = `https://code-generation-server.eastus2.cloudapp.azure.com/${sessionId}/`;
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
   if (!data) {
@@ -498,6 +522,7 @@ function StackBlitzOutput({ data, fullHeight = false, isOrchestrator = false}) {
           >
             <Monitor className="h-4 w-4" />
           </Button>
+
           <Button
             variant="ghost"
             size="icon"
