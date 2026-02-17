@@ -66,7 +66,7 @@ export function OutputPanel() {
   if (selectedTool === 'orchestrator') {
     if (maximizedCodeTool) {
       return (
-        <div className="flex flex-col h-full bg-background">
+        <div className="flex flex-col h-full bg-background" style={{ flex: 1, minWidth: 0 }}>
           <div className="p-4 border-b flex items-center justify-between flex-shrink-0">
             <h2 className="text-lg font-semibold">
               {maximizedCodeTool.tool === 'code_gen' && 'Code Generation'}
@@ -107,7 +107,7 @@ export function OutputPanel() {
     }
 
     return (
-      <div className="flex flex-col h-full bg-background">
+      <div className="flex flex-col h-full bg-background" style={{ flex: 1, minWidth: 0 }}>
         <div className="p-4 border-b flex items-center justify-between">
           <h2 className="text-lg font-semibold">Workflow Output</h2>
           <Button
@@ -231,7 +231,7 @@ export function OutputPanel() {
     };
 
     return (
-      <div className="flex flex-col h-full bg-background">
+      <div className="flex flex-col h-full bg-background" style={{ flex: 1, minWidth: 0 }}>
         <div className="p-4 border-b flex items-center justify-between flex-shrink-0">
           <h2 className="text-lg font-semibold">{getToolLabel(selectedTool)}</h2>
           <div className="flex items-center gap-2">
@@ -288,7 +288,7 @@ export function OutputPanel() {
   }
 
   return (
-    <div className="flex flex-col h-full bg-background">
+    <div className="flex flex-col h-full bg-background" style={{ flex: 1, minWidth: 0 }}>
       <div className="p-4 border-b flex items-center justify-between">
         <h2 className="text-lg font-semibold">{getToolLabel(selectedTool)}</h2>
 
@@ -348,7 +348,7 @@ export function OutputPanel() {
   );
 }
 
-/* ================= Sub Components ================= */
+/* ================= Sub Components (keep as is) ================= */
 
 function OutputCard({ title, icon, children, loading, onRefresh, onViewImage, onMaximize }) {
   return (
@@ -483,7 +483,6 @@ function StackBlitzOutput({ data, fullHeight = false, isOrchestrator = false}) {
     }
   };
 
-
   return (
     <div className={`flex flex-col ${fullHeight ? "h-full" : "space-y-3"}`}>
       <div
@@ -504,7 +503,6 @@ function StackBlitzOutput({ data, fullHeight = false, isOrchestrator = false}) {
           allow="accelerometer; camera; encrypted-media; geolocation; microphone; midi; usb; xr-spatial-tracking"
         />
       </div>
-      
 
       {!fullHeight && (
         <div className="flex items-center gap-2">
@@ -538,7 +536,6 @@ function StackBlitzOutput({ data, fullHeight = false, isOrchestrator = false}) {
     </div>
   );
 }
-
 
 function IndividualToolOutput({ tool, outputs, loading }: { tool: string; outputs: any; loading: boolean }) {
   const isCodeTool = ['code_gen', 'cicd', 'test_cases', 'test_data'].includes(tool);

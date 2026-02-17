@@ -10,39 +10,46 @@ import { runOrchestrator, runTool } from '@/features/tools/toolsThunks';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
-const SESSION_EXPIRATION_MS = 60 * 60 * 1000;
+const SESSION_EXPIRATION_MS = 1 * 60 * 1000;
 
-// Session API base URL
 const SESSION_API_BASE_URL = 'http://9.234.203.92:5000';
 
-// Helper function to stop session via API
+
 const stopSession = async (sessionId: string) => {
   try {
-    console.log('🛑 Stopping session:', sessionId);
+    console.log('Stopping session:', sessionId);
     await axios.post(`${SESSION_API_BASE_URL}/stop-session/${sessionId}`, {}, {
       timeout: 10000,
       headers: {
         'Content-Type': 'application/json',
       },
     });
-    console.log('✅ Session stopped successfully:', sessionId);
+    console.log(' Session stopped successfully:', sessionId);
   } catch (error) {
-    console.error('❌ Failed to stop session:', error);
+    console.error('Failed to stop session:', error);
   }
 };
 
-export function ChatPanel() {
+interface ChatPanelProps {
+  width: number;
+  onResize: (newWidth: number) => void;
+}
+
+export function ChatPanel({ width, onResize }: ChatPanelProps) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const { selectedTool } = useAppSelector((state) => state.tools);
   const { selectedProject } = useAppSelector((state) => state.projects);
-  const containerRef = useRef(null);
-  
-  // Ref to track the current session ID for cleanup
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const resizeRef = useRef<HTMLDivElement>(null);
   const currentSessionIdRef = useRef<string | null>(null);
-  const storageCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const expirationTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const hasExpiredRef = useRef(false); 
 
   useEffect(() => {
+
+    hasExpiredRef.current = false;
+
     const projectKey = selectedProject?.id
       ? `n8n_session_id_${selectedProject.id}`
       : 'n8n_session_id';
@@ -52,46 +59,75 @@ export function ChatPanel() {
 
     let sessionId = localStorage.getItem(projectKey);
     let sessionTimestamp = localStorage.getItem(timestampKey);
-
     const now = Date.now();
 
     if (sessionId && sessionTimestamp) {
-      const timestamp = parseInt(sessionTimestamp, 10);
-      const timeSinceCreation = now - timestamp;
-
-      if (timeSinceCreation >= SESSION_EXPIRATION_MS) {
-        console.log('⏰ Session expired. Stopping session and redirecting to projects workspace...');
-        
-        // Stop the session before removing it
-        const expiredSessionId = sessionId;
-        stopSession(expiredSessionId).finally(() => {
-          localStorage.removeItem(projectKey);
-          localStorage.removeItem(timestampKey);
-          currentSessionIdRef.current = null;
-          navigate('/');
-        });
+      const elapsed = now - parseInt(sessionTimestamp, 10);
+      if (elapsed >= SESSION_EXPIRATION_MS) {
+        console.log(' Session already expired on mount. Cleaning up and redirecting...');
+        const expiredId = sessionId;
+        localStorage.removeItem(projectKey);
+        localStorage.removeItem(timestampKey);
+        currentSessionIdRef.current = null;
+        stopSession(expiredId).finally(() => navigate('/'));
         return;
       }
+      console.log(
+        ` Resuming existing session. Time remaining: ${Math.floor(
+          (SESSION_EXPIRATION_MS - elapsed) / 1000
+        )}s`
+      );
     }
 
+    // --- Create new session if none exists ---
     if (!sessionId) {
       sessionId =
-        (typeof crypto !== 'undefined' && (crypto as any).randomUUID)
+        typeof crypto !== 'undefined' && (crypto as any).randomUUID
           ? (crypto as any).randomUUID()
           : `${Date.now()}-${Math.floor(Math.random() * 100000)}`;
 
       try {
         localStorage.setItem(projectKey, sessionId);
         localStorage.setItem(timestampKey, now.toString());
-        console.log('✅ New session created:', sessionId);
+        console.log(' New session created:', sessionId);
       } catch (e) {
-        console.error('❌ Failed to save session:', e);
+        console.error(' Failed to save session to localStorage:', e);
       }
     }
-    
-    // Store current session ID in ref for cleanup
+
     currentSessionIdRef.current = sessionId;
-    console.log('📌 Tracking session ID:', sessionId);
+    console.log('Tracking session ID:', sessionId);
+
+    // --- Single expiration handler ---
+    const handleSessionExpired = async () => {
+      if (hasExpiredRef.current) return;
+      hasExpiredRef.current = true;
+
+      console.log('Session expired. Stopping session and redirecting...');
+
+      const sessionToStop = currentSessionIdRef.current;
+      currentSessionIdRef.current = null;
+
+      localStorage.removeItem(projectKey);
+      localStorage.removeItem(timestampKey);
+
+      if (sessionToStop) {
+        await stopSession(sessionToStop);
+      }
+
+      navigate('/');
+    };
+
+    const storedTimestamp = localStorage.getItem(timestampKey);
+    const createdAt = storedTimestamp ? parseInt(storedTimestamp, 10) : now;
+    const elapsed = now - createdAt;
+    const remainingMs = Math.max(0, SESSION_EXPIRATION_MS - elapsed);
+
+    console.log(` Session expires in ${Math.floor(remainingMs / 1000)} seconds`);
+
+    expirationTimerRef.current = setTimeout(() => {
+      handleSessionExpired();
+    }, remainingMs);
 
     const webhookUrl = getWebhookUrl((selectedTool as any) || 'orchestrator');
 
@@ -128,65 +164,7 @@ export function ChatPanel() {
       loadPreviousSession: true,
     });
 
-    // Monitor localStorage for session removal in real-time
-    const storageCheckInterval = setInterval(() => {
-      const currentSessionInStorage = localStorage.getItem(projectKey);
-      const currentTimestamp = localStorage.getItem(timestampKey);
-
-      // Check if session was removed from localStorage
-      if (currentSessionIdRef.current && !currentSessionInStorage) {
-        console.log('🔍 Detected: Session removed from localStorage!');
-        console.log('🛑 Calling stop-session API for:', currentSessionIdRef.current);
-        
-        const sessionToStop = currentSessionIdRef.current;
-        currentSessionIdRef.current = null; // Clear the ref to prevent duplicate calls
-        
-        stopSession(sessionToStop);
-        return; // Exit early, no need to check expiration
-      }
-
-      // Check for session expiration
-      if (currentTimestamp) {
-        const timestamp = parseInt(currentTimestamp, 10);
-        const elapsed = Date.now() - timestamp;
-
-        if (elapsed >= SESSION_EXPIRATION_MS) {
-          console.log('⏰ Session expired during check. Stopping session and redirecting...');
-          
-          if (currentSessionInStorage && currentSessionIdRef.current) {
-            const sessionToStop = currentSessionInStorage;
-            stopSession(sessionToStop).finally(() => {
-              localStorage.removeItem(projectKey);
-              localStorage.removeItem(timestampKey);
-              currentSessionIdRef.current = null;
-              clearInterval(storageCheckInterval);
-              navigate('/');
-            });
-          } else {
-            clearInterval(storageCheckInterval);
-            navigate('/');
-          }
-        }
-      }
-    }, 1000); // Check every 1 second for real-time detection
-
-    storageCheckIntervalRef.current = storageCheckInterval;
-
-    const expirationCheckInterval = setInterval(() => {
-      const currentTimestamp = localStorage.getItem(timestampKey);
-      if (currentTimestamp) {
-        const timestamp = parseInt(currentTimestamp, 10);
-        const elapsed = Date.now() - timestamp;
-        if (elapsed >= SESSION_EXPIRATION_MS) {
-          console.log('Session expired during check. Redirecting...');
-          localStorage.removeItem(projectKey);
-          localStorage.removeItem(timestampKey);
-          clearInterval(expirationCheckInterval);
-          navigate('/');
-        }
-      }
-    }, 60000);
-
+    // --- Bot message observer ---
     let lastBotMessageTime = 0;
     let lastBotMessageHash = '';
     const MIN_API_CALL_INTERVAL = 2000;
@@ -237,24 +215,20 @@ export function ChatPanel() {
       return false;
     };
 
-    let observerCleanup: (() => void) | null = null;
-
     const handleBotMessage = async () => {
       if (!selectedProject) return;
 
       const toolKey = selectedTool || 'orchestrator';
       const lastDispatchStr = sessionStorage.getItem(`n8n_last_dispatch_${toolKey}`);
       const lastDispatchTime = lastDispatchStr ? parseInt(lastDispatchStr, 10) : 0;
-      const now = Date.now();
+      const nowMs = Date.now();
 
-      if (now - lastDispatchTime < TOOL_DISPATCH_COOLDOWN) {
-        console.log(
-          `⏳ Tool dispatch cooldown active for ${toolKey}. Skipping observer-triggered call.`
-        );
+      if (nowMs - lastDispatchTime < TOOL_DISPATCH_COOLDOWN) {
+        console.log(`⏳ Tool dispatch cooldown active for ${toolKey}. Skipping.`);
         return;
       }
 
-      sessionStorage.setItem(`n8n_last_dispatch_${toolKey}`, now.toString());
+      sessionStorage.setItem(`n8n_last_dispatch_${toolKey}`, nowMs.toString());
 
       const payload = {
         projectId: selectedProject.id,
@@ -265,15 +239,17 @@ export function ChatPanel() {
       if (selectedTool === 'orchestrator') {
         const result = await dispatch(runOrchestrator(payload));
         if ((result as any)?.meta?.requestStatus === 'fulfilled') {
-          console.log('✅ Orchestrator completed');
+          console.log(' Orchestrator completed');
         }
       } else {
         const result = await dispatch(runTool({ tool: selectedTool as any, payload }));
         if ((result as any)?.meta?.requestStatus === 'fulfilled') {
-          console.log('✅ Tool run completed:', selectedTool);
+          console.log('Tool run completed:', selectedTool);
         }
       }
     };
+
+    let observerCleanup: (() => void) | null = null;
 
     const setupObserver = () => {
       const messagesContainer =
@@ -301,7 +277,9 @@ export function ChatPanel() {
           lastBotMessageHash = lastHashFromExisting;
           lastBotMessageTime = Date.now();
         }
-      } catch (e) {}
+      } catch (e) {
+        console.error('Error processing existing messages:', e);
+      }
 
       const IGNORE_INITIAL_MS = 1500;
       const ignoreInitialUntil = Date.now() + IGNORE_INITIAL_MS;
@@ -318,21 +296,19 @@ export function ChatPanel() {
             for (const el of addedElements) {
               const msgEl = findMessageElement(el) || el;
               if (!msgEl) continue;
-
               if (!isBotMessageElement(msgEl)) continue;
 
               const text = (msgEl.textContent || '').trim();
               if (!text) continue;
 
-              const now = Date.now();
-              if (now < ignoreInitialUntil) continue;
+              const nowMs = Date.now();
+              if (nowMs < ignoreInitialUntil) continue;
 
               const hash = textHash(text);
               if (hash === lastBotMessageHash) continue;
+              if (nowMs - lastBotMessageTime < MIN_API_CALL_INTERVAL) continue;
 
-              if (now - lastBotMessageTime < MIN_API_CALL_INTERVAL) continue;
-
-              lastBotMessageTime = now;
+              lastBotMessageTime = nowMs;
               lastBotMessageHash = hash;
 
               console.log('🤖 Bot message detected. Tool:', selectedTool);
@@ -354,36 +330,72 @@ export function ChatPanel() {
 
     observerCleanup = setupObserver();
 
-    // Cleanup function
     return () => {
       if (observerCleanup) observerCleanup();
-      clearInterval(expirationCheckInterval);
-      
-      // Clear the storage check interval
-      if (storageCheckIntervalRef.current) {
-        clearInterval(storageCheckIntervalRef.current);
-        storageCheckIntervalRef.current = null;
-      }
-      
-      // Additional check on unmount (backup mechanism)
-      const sessionStillExists = localStorage.getItem(projectKey);
-      
-      if (currentSessionIdRef.current && !sessionStillExists) {
-        console.log('🧹 Cleanup: Session removed from localStorage during unmount');
-        stopSession(currentSessionIdRef.current);
-        currentSessionIdRef.current = null;
+      if (expirationTimerRef.current) {
+        clearTimeout(expirationTimerRef.current);
+        expirationTimerRef.current = null;
       }
     };
   }, [selectedProject, selectedTool, dispatch, navigate]);
 
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      const newWidth = e.clientX;
+      if (newWidth >= 300 && newWidth <= 800) {
+        onResize(newWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    const handleMouseDown = () => {
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    };
+
+    const resizeHandle = resizeRef.current;
+    if (resizeHandle) {
+      resizeHandle.addEventListener('mousedown', handleMouseDown);
+    }
+
+    return () => {
+      if (resizeHandle) {
+        resizeHandle.removeEventListener('mousedown', handleMouseDown);
+      }
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [onResize]);
+
   return (
-    <div className="flex flex-col h-full bg-card border-r">
+    <div
+      className="flex flex-col h-full bg-card border-r relative"
+      style={{
+        width: `${width}px`,
+        minWidth: `${width}px`,
+        maxWidth: `${width}px`,
+        flexShrink: 0,
+      }}
+    >
       <div className="p-4 border-b">
         <label className="text-sm font-medium text-muted-foreground mb-2 block">Select Tool</label>
-        <ToolSelector value={selectedTool} onChange={(tool) => dispatch(setSelectedTool(tool))} disabled={false} />
+        <ToolSelector
+          value={selectedTool}
+          onChange={(tool) => dispatch(setSelectedTool(tool))}
+          disabled={false}
+        />
       </div>
 
       <div id="n8n-chat-container" ref={containerRef} className="flex-1 overflow-hidden relative" />
+      <div ref={resizeRef} className="resize-handle" />
     </div>
   );
 }
