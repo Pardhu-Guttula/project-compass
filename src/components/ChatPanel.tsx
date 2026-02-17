@@ -9,34 +9,45 @@ import { getWebhookUrl } from '@/constants/tools';
 import { runOrchestrator, runTool } from '@/features/tools/toolsThunks';
 import { useNavigate } from 'react-router-dom';
 
-const SESSION_EXPIRATION_MS = 60 * 60 * 1000;
+const SESSION_EXPIRATION_MS = 60 * 60 * 1000; 
 
-export function ChatPanel() {
+interface ChatPanelProps {
+  width: number;
+  onResize: (newWidth: number) => void;
+}
+
+export function ChatPanel({ width, onResize }: ChatPanelProps) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const { selectedTool } = useAppSelector((state) => state.tools);
   const { selectedProject } = useAppSelector((state) => state.projects);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const resizeRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const projectKey = selectedProject?.id ? `n8n_session_id_${selectedProject.id}` : 'n8n_session_id';
     const timestampKey = selectedProject?.id ? `n8n_session_timestamp_${selectedProject.id}` : 'n8n_session_timestamp';
-    
+  
     let sessionId = localStorage.getItem(projectKey);
     let sessionTimestamp = localStorage.getItem(timestampKey);
 
     const now = Date.now();
+    
+
     if (sessionId && sessionTimestamp) {
       const timestamp = parseInt(sessionTimestamp, 10);
       const timeSinceCreation = now - timestamp;
       
       if (timeSinceCreation >= SESSION_EXPIRATION_MS) {
-        console.log('Session expired. Redirecting to projects workspace...');
+        console.log(' Session expired. Clearing old session and redirecting to projects workspace...');
 
         localStorage.removeItem(projectKey);
         localStorage.removeItem(timestampKey);
+
         navigate('/'); 
         return;
+      } else {
+        console.log(` Session valid. Time remaining: ${Math.floor((SESSION_EXPIRATION_MS - timeSinceCreation) / 1000)} seconds`);
       }
     }
 
@@ -47,10 +58,10 @@ export function ChatPanel() {
       try {
         localStorage.setItem(projectKey, sessionId);
         localStorage.setItem(timestampKey, now.toString());
-        console.log(' New session created:', sessionId);
+        console.log('🆕 New session created:', sessionId);
+        console.log('⏱️ Session will expire in:', SESSION_EXPIRATION_MS / 1000, 'seconds');
       } catch (e) {
-
-        console.error('Failed to save session:', e);
+        console.error(' Failed to save session:', e);
       }
     }
 
@@ -94,16 +105,23 @@ export function ChatPanel() {
       if (currentTimestamp) {
         const timestamp = parseInt(currentTimestamp, 10);
         const elapsed = Date.now() - timestamp;
+
+        const timeRemaining = Math.floor((SESSION_EXPIRATION_MS - elapsed) / 1000);
+        console.log(`Session check - Time remaining: ${timeRemaining} seconds`);
         
         if (elapsed >= SESSION_EXPIRATION_MS) {
-          console.log('Session expired during check. Redirecting...');
+          console.log('Session expired during periodic check. Redirecting...');
           localStorage.removeItem(projectKey);
           localStorage.removeItem(timestampKey);
           clearInterval(expirationCheckInterval);
           navigate('/');
         }
+      } else {
+        console.log('⚠️ Session not found. Redirecting...');
+        clearInterval(expirationCheckInterval);
+        navigate('/');
       }
-    }, 60000); 
+    }, 10000);
 
     let lastBotMessageTime = 0;
     let lastBotMessageHash = '';
@@ -158,7 +176,7 @@ export function ChatPanel() {
       const now = Date.now();
       
       if (now - lastDispatchTime < TOOL_DISPATCH_COOLDOWN) {
-        console.log(`⏳ Tool dispatch cooldown active for ${toolKey}. Skipping observer-triggered call.`);
+        console.log(`Tool dispatch cooldown active for ${toolKey}. Skipping observer-triggered call.`);
         return;
       }
       sessionStorage.setItem(`n8n_last_dispatch_${toolKey}`, now.toString());
@@ -202,7 +220,9 @@ export function ChatPanel() {
           lastBotMessageTime = Date.now();
         }
       } catch (e) {
+        console.error('Error processing existing messages:', e);
       }
+      
       const IGNORE_INITIAL_MS = 1500;
       const ignoreInitialUntil = Date.now() + IGNORE_INITIAL_MS;
 
@@ -235,7 +255,7 @@ export function ChatPanel() {
             }
           }
         } catch (error) {
-          console.error('Error in messages observer:', error);
+          console.error(' Error in messages observer:', error);
         }
       });
 
@@ -251,14 +271,62 @@ export function ChatPanel() {
     };
   }, [selectedProject, selectedTool, dispatch, navigate]);
 
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      const newWidth = e.clientX;
+      if (newWidth >= 300 && newWidth <= 800) {
+        onResize(newWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    const handleMouseDown = () => {
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    };
+
+    const resizeHandle = resizeRef.current;
+    if (resizeHandle) {
+      resizeHandle.addEventListener('mousedown', handleMouseDown);
+    }
+
+    return () => {
+      if (resizeHandle) {
+        resizeHandle.removeEventListener('mousedown', handleMouseDown);
+      }
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [onResize]);
+
   return (
-    <div className="flex flex-col h-full bg-card border-r">
+    <div 
+      className="flex flex-col h-full bg-card border-r relative" 
+      style={{ 
+        width: `${width}px`, 
+        minWidth: `${width}px`,
+        maxWidth: `${width}px`,
+        flexShrink: 0 
+      }}
+    >
       <div className="p-4 border-b">
         <label className="text-sm font-medium text-muted-foreground mb-2 block">Select Tool</label>
         <ToolSelector value={selectedTool} onChange={(tool) => dispatch(setSelectedTool(tool))} disabled={false} />
       </div>
 
       <div id="n8n-chat-container" ref={containerRef} className="flex-1 overflow-hidden relative" />
+      <div
+        ref={resizeRef}
+        className="resize-handle"
+      />
     </div>
   );
 }
