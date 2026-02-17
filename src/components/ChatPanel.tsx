@@ -10,7 +10,7 @@ import { runOrchestrator, runTool } from '@/features/tools/toolsThunks';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
-const SESSION_EXPIRATION_MS = 1 * 60 * 1000;
+const SESSION_EXPIRATION_MS = 60 * 60 * 1000;
 
 const SESSION_API_BASE_URL = 'http://9.234.203.92:5000';
 

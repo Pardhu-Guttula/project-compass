@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { getToolLabel } from '@/constants/tools';
 import { useRef, useState } from 'react';
+import { EpicsAccordion } from '@/components/EpicsAccordion';
 
 export function OutputPanel() {
   const dispatch = useAppDispatch();
@@ -30,7 +31,7 @@ export function OutputPanel() {
   const [previewImage, setPreviewImage] = useState(null);
   const [maximizedCodeTool, setMaximizedCodeTool] = useState(null);
 
-  const handleRefresh = (tool) => {
+  const handleRefresh = (tool?: string) => {
     if (!selectedProject) return;
 
     const payload = {
@@ -53,7 +54,7 @@ export function OutputPanel() {
     }
   };
 
-  const toggleMaximize= (toolName, data) => {
+  const toggleMaximize = (toolName: string, data: any) => {
     if (maximizedCodeTool) {
       setMaximizedCodeTool(null);
     } else if (data) {
@@ -110,10 +111,11 @@ export function OutputPanel() {
       <div className="flex flex-col h-full bg-background" style={{ flex: 1, minWidth: 0 }}>
         <div className="p-4 border-b flex items-center justify-between">
           <h2 className="text-lg font-semibold">Workflow Output</h2>
+          {/* FIX: was passing maximizedCodeTool.tool (null crash) — now calls handleRefresh() with no args to trigger orchestrator */}
           <Button
             variant="outline"
             size="sm"
-            onClick={() => handleRefresh(maximizedCodeTool.tool)}
+            onClick={() => handleRefresh()}
             disabled={loading}
           >
             {loading ? (
@@ -139,8 +141,12 @@ export function OutputPanel() {
               loading={loadingTool === 'epics'}
               onRefresh={() => handleRefresh('epics')}
             >
-              <EpicsOutput data={outputs.epics_and_user_stories} />
+            {outputs.epics_and_user_stories
+               ? <EpicsAccordion data={outputs.epics_and_user_stories} />
+               : <p className="text-sm text-muted-foreground">No data found</p>
+            }
             </OutputCard>
+
             <OutputCard
               title="Architecture Generation"
               icon={<ImageIcon className="h-4 w-4" />}
@@ -200,9 +206,9 @@ export function OutputPanel() {
 
   if (isCodeTool) {
     const toolData = outputs[selectedTool];
-    
-    const sessionId = selectedProject?.id 
-      ? localStorage.getItem(`n8n_session_id_${selectedProject.id}`) 
+
+    const sessionId = selectedProject?.id
+      ? localStorage.getItem(`n8n_session_id_${selectedProject.id}`)
       : null;
 
     if (!sessionId) {
@@ -295,8 +301,8 @@ export function OutputPanel() {
         <div className="flex items-center gap-2">
           {(selectedTool === 'arch_gen' || selectedTool === 'arch_val') && (
             <Button size="sm" variant="secondary" onClick={() => {
-              const img = selectedTool === 'arch_gen' 
-                ? outputs.arch_gen?.image 
+              const img = selectedTool === 'arch_gen'
+                ? outputs.arch_gen?.image
                 : outputs.arch_val?.image;
               openPreview(img);
             }}>
@@ -348,9 +354,9 @@ export function OutputPanel() {
   );
 }
 
-/* ================= Sub Components (keep as is) ================= */
+/* ================= Sub Components ================= */
 
-function OutputCard({ title, icon, children, loading, onRefresh, onViewImage, onMaximize }) {
+function OutputCard({ title, icon, children, loading, onRefresh, onViewImage = null, onMaximize = null }) {
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -404,34 +410,6 @@ function OutputCard({ title, icon, children, loading, onRefresh, onViewImage, on
   );
 }
 
-function EpicsOutput({ data }: { data?: { titles: string[]; ids?: string[]; jiraUrl: string } }) {
-  if (!data || !data.titles || data.titles.length === 0) {
-    return <p className="text-sm text-muted-foreground">No data found</p>;
-  }
-
-  return (
-    <div className="space-y-3">
-      {data.titles.slice(0,2).map((title: string, i: number) => (
-        <div key={i} className="p-3 bg-muted rounded-lg">
-          <p className="text-sm font-medium">
-            {data.ids?.[i] && (
-              <span className="text-primary font-semibold mr-2">{data.ids[i]}</span>
-            )}
-            {title}
-          </p>
-        </div>
-      ))}
-      {data.jiraUrl && (
-        <Button variant="link" size="sm" className="p-0 h-auto" asChild>
-          <a href={data.jiraUrl} target="_blank" rel="noopener noreferrer">
-            View in JIRA <ExternalLink className="h-3 w-3 ml-1" />
-          </a>
-        </Button>
-      )}
-    </div>
-  );
-}
-
 function ArchitectureOutput({ data }) {
   if (!data?.image)
     return <p className="text-sm text-muted-foreground">No data found</p>;
@@ -443,10 +421,22 @@ function ArchitectureOutput({ data }) {
   );
 }
 
-function StackBlitzOutput({ data, fullHeight = false, isOrchestrator = false}) {
+function StackBlitzOutput({
+  data,
+  fullHeight = false,
+  isOrchestrator = false,
+}: {
+  data: any;
+  fullHeight?: boolean;
+  isOrchestrator?: boolean;
+}) {
   const { selectedProject } = useAppSelector((state) => state.projects);
-  const sessionId = selectedProject?.id 
-    ? localStorage.getItem(`n8n_session_id_${selectedProject.id}`) 
+
+  // FIX: useRef must be called unconditionally (Rules of Hooks) — moved above early returns
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+
+  const sessionId = selectedProject?.id
+    ? localStorage.getItem(`n8n_session_id_${selectedProject.id}`)
     : null;
 
   if (!sessionId) {
@@ -457,9 +447,6 @@ function StackBlitzOutput({ data, fullHeight = false, isOrchestrator = false}) {
     );
   }
 
-  const localHostUrl = `https://code-generation-server.eastus2.cloudapp.azure.com/${sessionId}/`;
-  const iframeRef = useRef<HTMLIFrameElement | null>(null);
-
   if (!data) {
     return (
       <p className="text-sm text-muted-foreground">
@@ -467,6 +454,8 @@ function StackBlitzOutput({ data, fullHeight = false, isOrchestrator = false}) {
       </p>
     );
   }
+
+  const localHostUrl = `https://code-generation-server.eastus2.cloudapp.azure.com/${sessionId}/`;
 
   const handleOpenNewTab = () => {
     window.open(localHostUrl, '_blank');
@@ -484,16 +473,16 @@ function StackBlitzOutput({ data, fullHeight = false, isOrchestrator = false}) {
   };
 
   return (
-    <div className={`flex flex-col ${fullHeight ? "h-full" : "space-y-3"}`}>
+    <div className={`flex flex-col ${fullHeight ? 'h-full' : 'space-y-3'}`}>
       <div
         className="relative rounded-lg overflow-hidden border bg-muted"
         style={{
           height: fullHeight
-            ? "100%"
+            ? '100%'
             : isOrchestrator
-            ? "320px"
-            : "300px",
-          minHeight: isOrchestrator ? "320px" : undefined,
+            ? '320px'
+            : '300px',
+          minHeight: isOrchestrator ? '320px' : undefined,
         }}
       >
         <iframe
@@ -522,7 +511,6 @@ function StackBlitzOutput({ data, fullHeight = false, isOrchestrator = false}) {
           >
             <Monitor className="h-4 w-4" />
           </Button>
-
           <Button
             variant="ghost"
             size="icon"
@@ -537,12 +525,20 @@ function StackBlitzOutput({ data, fullHeight = false, isOrchestrator = false}) {
   );
 }
 
-function IndividualToolOutput({ tool, outputs, loading }: { tool: string; outputs: any; loading: boolean }) {
+function IndividualToolOutput({
+  tool,
+  outputs,
+  loading,
+}: {
+  tool: string;
+  outputs: any;
+  loading: boolean;
+}) {
   const isCodeTool = ['code_gen', 'cicd', 'test_cases', 'test_data'].includes(tool);
-  
+
   switch (tool) {
     case 'epics':
-      return <EpicsOutput data={outputs.epics_and_user_stories} />;
+      return <EpicsAccordion data={outputs.epics_and_user_stories} />;
     case 'arch_gen':
       return <ArchitectureOutput data={outputs.arch_gen} />;
     case 'arch_val':
