@@ -47,14 +47,16 @@
    return TOOL_OPTIONS.find((t) => t.id === toolId)?.label || toolId;
  };
 
- // Webhook URLs for each tool's chat
  export const TOOL_WEBHOOK_URLS: Record<string, string> = {
    orchestrator: 'https://cloudoptics-n8n.westcentralus.cloudapp.azure.com/webhook/b6eb824e-4e98-4ae1-8052-fc6175ae49f5/chat',
    epics: 'https://cloudoptics-n8n.westcentralus.cloudapp.azure.com/webhook/2d7a2a2f-4dc7-4d03-9935-4864bac78a45/chat',
    arch_gen: 'https://cloudoptics-n8n.westcentralus.cloudapp.azure.com/webhook/7f79f7c9-ea10-40ee-b6ad-982ba4848c91/chat',
    arch_val: 'https://cloudoptics-n8n.westcentralus.cloudapp.azure.com/webhook/50487dc2-007f-44b4-8551-7d75ca20355f/chat',
    code_gen: 'https://cloudoptics-n8n.westcentralus.cloudapp.azure.com/webhook/43024b33-8e78-475a-9949-7202e1c7b027/chat',
-   
+   cicd: 'https://cloudoptics-n8n.westcentralus.cloudapp.azure.com/webhook/d19f787a-a312-4aaf-98a8-595d184bf9c8/chat',
+   test_cases: 'https://cloudoptics-n8n.westcentralus.cloudapp.azure.com/webhook/5c29ddb2-24c5-42f2-9478-a769b79ca7be/chat',
+   test_data: 'https://cloudoptics-n8n.westcentralus.cloudapp.azure.com/webhook/5e1d8fa0-80dd-4eed-b0dd-4e3f4e7bda37/chat',
+
  };
 
  // Main orchestrator API endpoint (triggered after each bot reply)
