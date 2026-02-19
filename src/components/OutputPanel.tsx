@@ -219,7 +219,7 @@ export function OutputPanel() {
       );
     }
 
-    const localHostUrl = `https://code-generation-server.eastus2.cloudapp.azure.com/${sessionId}/`;
+    const localHostUrl = `https://code-generation-server.eastus2.cloudapp.azure.com/${sessionId}/editor/`;
 
     const handleOpenNewTab = () => {
       window.open(localHostUrl, '_blank');
@@ -455,7 +455,7 @@ function StackBlitzOutput({
     );
   }
 
-  const localHostUrl = `https://code-generation-server.eastus2.cloudapp.azure.com/${sessionId}/`;
+  const localHostUrl = `https://code-generation-server.eastus2.cloudapp.azure.com/${sessionId}/editor/`;
 
   const handleOpenNewTab = () => {
     window.open(localHostUrl, '_blank');
@@ -489,8 +489,33 @@ function StackBlitzOutput({
           ref={iframeRef}
           src={localHostUrl}
           className="w-full h-full"
-          allow="accelerometer; camera; encrypted-media; geolocation; microphone; midi; usb; xr-spatial-tracking"
-        />
+          onLoad={() => {
+            const iframe = iframeRef.current;
+            if (!iframe) return;
+
+    // wait a moment for editor to fully boot
+            setTimeout(() => {
+              try {
+                const win = iframe.contentWindow;
+
+                win?.document.dispatchEvent(
+                  new KeyboardEvent("keydown", {
+                    key: "`",
+                    code: "Backquote",
+                    ctrlKey: true,
+                    bubbles: true,
+                  })
+              );
+
+              console.log("✅ Terminal shortcut triggered");
+            } catch (err) {
+              console.log("❌ Browser blocked iframe keyboard injection");
+            }
+          }, 1500);
+        }}
+        allow="accelerometer; camera; encrypted-media; geolocation; microphone; midi; usb; xr-spatial-tracking"
+       />
+
       </div>
 
       {!fullHeight && (
