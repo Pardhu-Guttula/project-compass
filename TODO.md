@@ -1,35 +1,24 @@
-# TODO: Integrate fetch-jira-tickets webhook
+# TODO - Integrate fetch-jira-tickets webhook
 
-## Task Summary
-Integrate the fetch-jira-tickets webhook that should be called every time before get-selected-workspace-response API is called.
+## Task Analysis
+The task requires integrating the `fetch-jira-tickets` webhook that should be called every time BEFORE `get-selected-workspace-response` API is called. The project and component should be fetched from `get-user-workspace-detail` API.
 
-## Webhook Details
-- URL: `https://cloudoptics-n8n.westcentralus.cloudapp.azure.com/webhook/fetch-jira-tickets`
-- Payload:
-  
-```
-json
-  {
-    "issueType": "Both",
-    "project": "<project_from_get_user_workspace_detail>",
-    "component": "<component_from_get_user_workspace_detail>"
-  }
-  
-```
+## Current State
+- The `syncJiraTickets` function exists in `toolsService.ts`
+- It's currently being called AFTER `get-selected-workspace-response`
+- It uses `wsData?.project` and `wsData?.component` from the response data
+
+## Required Changes
+1. Modify the flow to call `get-user-workspace-detail` API first
+2. Extract project and component from that response
+3. Call `fetch-jira-tickets` webhook with those values (BEFORE `get-selected-workspace-response`)
+4. Then call `get-selected-workspace-response`
 
 ## Files to Edit
-1. `src/features/tools/toolsService.ts` - Add new function and modify existing methods
+- [ ] `src/features/tools/toolsService.ts` - Modify the `runOrchestrator`, `runEpics`, `runArchGen`, `runArchVal` functions to call the jira sync before get-selected-workspace-response
 
 ## Implementation Steps
-- [ ] 1. Add a new function `fetchJiraTickets` in `toolsService.ts` that:
-      - Calls `get-user-workspace-details` API to get project and component values
-      - Calls `fetch-jira-tickets` webhook with the payload
-- [ ] 2. Modify `runOrchestrator` method to call `fetchJiraTickets` before calling `get-selected-workspace-response`
-- [ ] 3. Modify `runEpics` method to call `fetchJiraTickets` before calling `get-selected-workspace-response`
-- [ ] 4. Modify `runArchGen` method to call `fetchJiraTickets` before calling `get-selected-workspace-response`
-- [ ] 5. Modify `runArchVal` method to call `fetchJiraTickets` before calling `get-selected-workspace-response`
-
-## Notes
-- The project and component values should be extracted from the `get-user-workspace-details` API response
-- Based on typical JIRA API structures, the fields might be `jira_project` and `component` or similar
-- The webhook call should not block the main flow - it can be a fire-and-forget call
+- [ ] Step 1: Modify `syncJiraTickets` to accept project and component as parameters
+- [ ] Step 2: Add a function to call `get-user-workspace-detail` API
+- [ ] Step 3: Modify `runOrchestrator` to call get-user-workspace-detail first, then syncJiraTickets, then get-selected-workspace-response
+- [ ] Step 4: Apply similar changes to `runEpics`, `runArchGen`, `runArchVal` functions

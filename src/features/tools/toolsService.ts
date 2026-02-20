@@ -39,22 +39,25 @@ function getRepo(apiData: any, key: string): CodeGenResponse {
 
 /* -------- Jira sync using existing workspace data -------- */
 
-async function syncJiraTickets(wsData: any) {
+export async function syncJiraTickets(wsData: any) {
   try {
     const jiraPayload = {
       issueType: 'Both',
-      project: wsData?.project || 'ADAM',
-      component: wsData?.component || 'SDLC2.0',
+      project: wsData?.project,
+      component: wsData?.component,
     };
 
-    await axiosInstance.post(
+    const response = await axiosInstance.post(
       '/webhook/fetch-jira-tickets',
       jiraPayload
     );
 
-    console.log('Jira sync completed');
+    console.log('Jira sync completed:', response.data);
+
+    return response.data;   // ✅ VERY IMPORTANT
   } catch (error) {
     console.error('Jira sync failed:', error);
+    throw error;   // ✅ Let Redux catch it
   }
 }
 
@@ -115,8 +118,6 @@ export const toolsService = {
         ? response.data[0]
         : response.data;
 
-      // ✅ Jira sync using existing workspace data
-      await syncJiraTickets(data);
 
       return transformApiResponse(data);
 

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Accordion,
   AccordionContent,
@@ -7,78 +7,133 @@ import {
 } from '@/components/ui/accordion';
 import { Input } from '@/components/ui/input';
 import { EpicsTable } from '@/components/EpicsTable';
-import { Epic, generateEpicsWithStories } from '@/types/epics';
-import { ExternalLink, Search, X } from 'lucide-react';
+import { Epic, EpicsWithStories, fetchEpicsWithStories } from '@/types/epics';
+import { ExternalLink, Search, X, Loader2 } from 'lucide-react';
+import { syncJiraTickets } from '../features/tools/toolsService';
+import { useAppSelector } from '@/store/hooks';
+// adjust path based on where your function is
 
 interface EpicsAccordionProps {
-  data: {
-    titles: string[];
-    ids?: string[];
-    jiraUrl: string;
-  };
+  data?: any; // kept for backward compat, no longer used for fetching
 }
 
 export function EpicsAccordion({ data }: EpicsAccordionProps) {
-  if (!data || !data.titles || data.titles.length === 0) {
-    return <p className="text-sm text-muted-foreground">No epics found</p>;
-  }
+  const jiraData = useAppSelector((state) => state.projects.jiraData); // ✅ TOP LEVEL
 
-  const epicsWithStories = generateEpicsWithStories(data.titles, data.ids, data.jiraUrl);
-
+  console.log('Jira data from Redux:', jiraData); // Debug log to verify data structure
+  const [epicsWithStories, setEpicsWithStories] =
+    useState<EpicsWithStories | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // ── Search across ALL epics and their user stories ──
-  const searchResults = useMemo(() => {
-    if (!searchQuery.trim()) return null;
+  useEffect(() => {
+    if (!jiraData) {
+      setLoading(false);
+      return;
+    }
 
-    // Split query into individual tokens — "login high" matches stories
-    // that contain BOTH "login" AND "high" anywhere across all fields
-    const tokens = searchQuery
-      .toLowerCase()
-      .trim()
-      .split(/\s+/)
-      .filter(Boolean);
+    try {
+      setLoading(true);
+      setError(null);
 
-    const results: {
-      epicId: string;
-      epicTitle: string;
-      matches: typeof epicsWithStories.epics[0]['userStories'];
-    }[] = [];
+    //const issues = jiraData?.data?.issues ?? [];
+    const issues = Array.isArray(jiraData) ? jiraData : [];
+    
 
-    epicsWithStories.epics.forEach((epic) => {
-      const matchingStories = epic.userStories.filter((story) => {
-        // Combine every field into one searchable string
-        const haystack = [
-          story.id,
-          story.title,
-          story.description,
-          story.priority,
-          story.status,
-          epic.id,       // also match by epic ID
-          epic.title,    // also match by epic title
-        ]
-          .join(' ')
-          .toLowerCase();
+      // ✅ 1. Separate Epics
+    const epics = issues.filter(
+      (issue: any) => issue.fields.issuetype.name === 'Epic'
+    );
 
-        // Every token must appear somewhere — partial matches work too
-        // e.g. "log" matches "login", "us" matches "user"
-        return tokens.every((token) => haystack.includes(token));
-      });
+    // ✅ 2. Separate Stories
+    const stories = issues.filter(
+      (issue: any) => issue.fields.issuetype.name === 'Story'
+    );
 
-      if (matchingStories.length > 0) {
-        results.push({
-          epicId: epic.id,
-          epicTitle: epic.title,
-          matches: matchingStories,
-        });
-      }
+    // ✅ 3. Map Stories under their respective Epics
+    const mappedEpics = epics.map((epic: any) => {
+      const epicStories = stories.filter(
+        (story: any) =>
+          story.fields.parent?.key === epic.key
+      );
+
+      return {
+        id: epic.key,
+        title: epic.fields.summary,
+        userStories: epicStories.map((story: any) => ({
+          id: story.key,
+          title: story.fields.summary,
+          description: story.fields.description || '',
+          priority: story.fields.priority?.name || 'Medium',
+          status: story.fields.status?.name || 'To Do',
+        })),
+      };
     });
 
-    return results;
+    setEpicsWithStories({
+      jiraUrl: jiraData.jiraUrl,
+      epics: mappedEpics,
+    });
+
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [jiraData]); // ✅ dependency on redux state
+
+
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim() || !epicsWithStories) return null;
+
+    const tokens = searchQuery.toLowerCase().trim().split(/\s+/).filter(Boolean);
+
+    return epicsWithStories.epics
+      .map((epic) => ({
+        epicId: epic.id,
+        epicTitle: epic.title,
+        matches: epic.userStories.filter((story) => {
+           const haystack = [
+    story.id ?? '',
+    story.title ?? '',
+    story.description ?? '',
+    story.priority ?? '',
+    story.status ?? '',
+    epic.id ?? '',
+    epic.title ?? '',
+  ].join(' ').toLowerCase();
+          return tokens.every((token) => haystack.includes(token));
+        }),
+      }))
+      .filter((r) => r.matches.length > 0);
   }, [searchQuery, epicsWithStories]);
 
-  const totalMatchCount =
-    searchResults?.reduce((acc, r) => acc + r.matches.length, 0) ?? 0;
+  const totalMatchCount = useMemo(
+    () => searchResults?.reduce((acc, r) => acc + r.matches.length, 0) ?? 0,
+    [searchResults]
+  );
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 text-sm text-gray-500 py-4">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Fetching epics from Jira...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <p className="text-sm text-red-500 py-4">
+        Failed to load Jira data: {error}
+      </p>
+    );
+  }
+
+  if (!epicsWithStories || epicsWithStories.epics.length === 0) {
+    return <p className="text-sm text-muted-foreground">No epics found</p>;
+  }
 
   const priorityColors: Record<string, string> = {
     High: 'bg-red-100 text-red-800 border-red-200',
@@ -92,14 +147,16 @@ export function EpicsAccordion({ data }: EpicsAccordionProps) {
     Done: 'bg-green-100 text-green-800 border-green-200',
   };
 
+  const jiraUrl = epicsWithStories.jiraUrl;
+
   return (
     <div className="space-y-4">
 
       {/* ── Header ── */}
       <div className="flex items-center justify-between">
-        {data.jiraUrl && (
+        {jiraUrl && (
           <a
-            href={data.jiraUrl}
+            href={jiraUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
@@ -132,7 +189,6 @@ export function EpicsAccordion({ data }: EpicsAccordionProps) {
       {/* ── Search Results View ── */}
       {searchQuery.trim() && (
         <div className="space-y-3">
-          {/* Result count */}
           <p className="text-xs text-gray-500">
             {totalMatchCount === 0
               ? `No results for "${searchQuery}"`
@@ -153,8 +209,6 @@ export function EpicsAccordion({ data }: EpicsAccordionProps) {
           ) : (
             searchResults!.map((group) => (
               <div key={group.epicId} className="border rounded-lg overflow-hidden">
-
-                {/* Epic header */}
                 <div className="bg-blue-50 px-4 py-2 flex items-center gap-2 border-b">
                   <span className="bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-0.5 rounded">
                     {group.epicId}
@@ -166,8 +220,6 @@ export function EpicsAccordion({ data }: EpicsAccordionProps) {
                     {group.matches.length} match{group.matches.length !== 1 ? 'es' : ''}
                   </span>
                 </div>
-
-                {/* Matching stories */}
                 <div className="divide-y">
                   {group.matches.map((story) => (
                     <div
@@ -206,10 +258,10 @@ export function EpicsAccordion({ data }: EpicsAccordionProps) {
         </div>
       )}
 
-      {/* ── Normal Accordion View (hidden while searching) ── */}
+      {/* ── Normal Accordion View ── */}
       {!searchQuery.trim() && (
         <Accordion type="multiple" className="w-full space-y-2">
-          {epicsWithStories.epics.slice(0, 2).map((epic: Epic, index: number) => (
+          {epicsWithStories.epics.slice(0, 3).map((epic: Epic, index: number) => (
             <AccordionItem
               key={epic.id}
               value={`item-${index}`}
