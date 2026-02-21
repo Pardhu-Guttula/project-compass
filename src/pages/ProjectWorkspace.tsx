@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ProjectCard } from '@/components/ProjectCard';
@@ -7,19 +7,33 @@ import { CreateProjectDialog } from '@/components/CreateProjectDialog';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { fetchProjects, createProject, selectProject } from '@/features/projects/projectsThunks';
 import type { Project, CreateProjectPayload } from '@/types';
-//import { Plus, circuitboard } from 'lucide-react';
 import { Plus, CircuitBoard } from 'lucide-react';
+
 
 export default function ProjectWorkspace() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+
+  const [searchParams] = useSearchParams();
+  const urlEmail = searchParams.get("email");
+
   const { projects, loading, error } = useAppSelector((state) => state.projects);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [creating, setCreating] = useState(false);
 
   useEffect(() => {
-    dispatch(fetchProjects('pardhu.guttula@brillio.com'));
-  }, [dispatch]);
+  if (urlEmail) {
+    localStorage.setItem("email", urlEmail);
+  }
+}, [urlEmail]);
+
+const email = localStorage.getItem("email") || "";
+
+  useEffect(() => {
+    if (email) {
+      dispatch(fetchProjects(email));
+    }
+  }, [dispatch, email]);
 
   const handleProjectClick = async (project: Project) => {
     console.log('Selecting project:', project);
@@ -32,7 +46,7 @@ export default function ProjectWorkspace() {
     try {
       await dispatch(createProject(payload)).unwrap();
       setDialogOpen(false);
-      await dispatch(fetchProjects('pardhu.guttula@brillio.com'));
+      await dispatch(fetchProjects(email));
     } catch (error) {
       console.error('Failed to create project:', error);
     } finally {
@@ -51,18 +65,16 @@ export default function ProjectWorkspace() {
                 <CircuitBoard className="h-6 w-6 text-primary-foreground" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-foreground"> Engineering LifeCycle</h1>
+                <h1 className="text-2xl font-bold text-foreground">SDLC 2.0</h1>
                 <p className="text-sm text-muted-foreground">
                   Manage your software development projects
                 </p>
               </div>
             </div>
-            <Button onClick={() => setDialogOpen(true)} className="transition-colors hover:bg-[#413A64] hover:bg-[#413A64]">
-               <Plus className="h-4 w-4 mr-2" />
-               Create New
+            <Button onClick={() => setDialogOpen(true)} className="transition-colors hover:bg-[#413A64]">
+              <Plus className="h-4 w-4 mr-2" />
+              Create New
             </Button>
-
-            
           </div>
         </div>
       </header>
@@ -99,7 +111,6 @@ export default function ProjectWorkspace() {
             <p className="text-muted-foreground mb-6">
               Create your first SDLC workspace to get started
             </p>
-
             <Button onClick={() => setDialogOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Create New Workspace

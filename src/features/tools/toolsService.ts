@@ -81,7 +81,7 @@ function transformApiResponse(apiData: any): OrchestratorResponse {
 
       jiraUrl:
         apiData?.jira_url ||
-        'https://jira.example.com/project/DEFAULT',
+        'https://brillio.atlassian.net/jira/software/c/projects/ADAM/boards/2056/backlog',
     },
 
     arch_gen: {

@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { runOrchestrator, runTool } from '@/features/tools/toolsThunks';
+import { getSpecialSessionId } from "@/components/session";
+
 import {
   ExternalLink,
   RefreshCw,
@@ -21,24 +23,104 @@ import {
   PanelRight,
   Columns2,
   GripVertical,
+  GitBranch,
+  X,
+  RotateCcw,
 } from 'lucide-react';
 import { getToolLabel } from '@/constants/tools';
 import { useRef, useState, useCallback, useEffect } from 'react';
+import { styles, inlineStyles } from './Oppstyle';
 
+const PORT_OPTIONS = [
+  { value: '5173', label: ':5173 — Vite (React)' },
+  { value: '3000', label: ':3000 — React / Next.js' },
+  { value: '3001', label: ':3001 — Node.js Backend' },
+  { value: '8000', label: ':8000 — Python (Flask/Django)' },
+  { value: '8888', label: ':8888 — Java Spring Boot' },
+];
+
+function StatusBar({ activePort }: { activePort: string }) {
+
+  const [activePorts, setActivePorts] = useState<number[]>([]);
+
+  useEffect(() => {
+    if (!activePort) return;
+    
+    const checkPort = async () => {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 1500);
+
+      await fetch(`http://localhost:${activePort}`, {
+        mode: 'no-cors',
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeout);
+      setActivePorts([parseInt(activePort)]);
+    } catch {
+      setActivePorts([]);
+    }
+  };
+
+  checkPort();
+}, [activePort]);
+
+  const isCurrentPortActive = activePorts.includes(parseInt(activePort));
+
+  return (
+    <div className={styles.statusBar}>
+      <div className={styles.statusItem}>
+        <span className={styles.statusDot} />
+        Workspace Ready
+      </div>
+      <span className="ml-auto">
+        {isCurrentPortActive
+          ? `Active: ${activePorts.map((p) => ':' + p).join(', ')}`
+          : ' '}
+      </span>
+    </div>
+  );
+}
+
+/* ================= DualIframeView ================= */
 interface DualIframeViewProps {
   primaryUrl: string;
   secondaryUrl: string;
-  fullHeight?: boolean;
+  sessionId?: string | null;
+  showCloneButton?: boolean;
+  showStatusBar?: boolean;
+  showPortSelector?: boolean;
+  showExternalButtons?: boolean;
+  repoUrl?: string | null;
 }
 
-function DualIframeView({ primaryUrl, secondaryUrl, fullHeight = false }: DualIframeViewProps) {
+function DualIframeView({
+  primaryUrl,
+  secondaryUrl,
+  sessionId,
+  showCloneButton = false,
+  showStatusBar = false,
+  showPortSelector = false,
+  showExternalButtons = false,
+  repoUrl,
+}: DualIframeViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const editorFrameRef = useRef<HTMLIFrameElement>(null);
+  const previewFrameRef = useRef<HTMLIFrameElement>(null);
   const isDragging = useRef(false);
   const animFrameRef = useRef<number | null>(null);
 
   const [leftWidth, setLeftWidth] = useState(50);
   const [activePanel, setActivePanel] = useState<'both' | 'left' | 'right'>('both');
   const [isDraggingState, setIsDraggingState] = useState(false);
+  const [selectedPort, setSelectedPort] = useState('5173');
+  const [showCloneModal, setShowCloneModal] = useState(false);
+
+  const portPreviewUrl = sessionId
+    ? `https://code-generation-server.eastus2.cloudapp.azure.com/${sessionId}/preview/?port=${selectedPort}`
+    : secondaryUrl;
+  const effectivePreviewUrl = showPortSelector ? portPreviewUrl : secondaryUrl;
 
   const onMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -51,20 +133,14 @@ function DualIframeView({ primaryUrl, secondaryUrl, fullHeight = false }: DualIf
   useEffect(() => {
     const onMouseMove = (e: MouseEvent) => {
       if (!isDragging.current || !containerRef.current) return;
-
-      if (animFrameRef.current !== null) {
-        cancelAnimationFrame(animFrameRef.current);
-      }
-
+      if (animFrameRef.current !== null) cancelAnimationFrame(animFrameRef.current);
       animFrameRef.current = requestAnimationFrame(() => {
         if (!containerRef.current) return;
         const rect = containerRef.current.getBoundingClientRect();
         const rawPercent = ((e.clientX - rect.left) / rect.width) * 100;
-        const clamped = Math.min(85, Math.max(15, rawPercent));
-        setLeftWidth(clamped);
+        setLeftWidth(Math.min(85, Math.max(15, rawPercent)));
       });
     };
-
     const onMouseUp = () => {
       if (!isDragging.current) return;
       isDragging.current = false;
@@ -76,157 +152,235 @@ function DualIframeView({ primaryUrl, secondaryUrl, fullHeight = false }: DualIf
         animFrameRef.current = null;
       }
     };
-
     document.addEventListener('mousemove', onMouseMove);
     document.addEventListener('mouseup', onMouseUp);
     return () => {
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mouseup', onMouseUp);
-      if (animFrameRef.current !== null) {
-        cancelAnimationFrame(animFrameRef.current);
-      }
+      if (animFrameRef.current !== null) cancelAnimationFrame(animFrameRef.current);
     };
   }, []);
 
+  // Keyboard shortcuts: Ctrl+1 editor, Ctrl+2 split, Ctrl+3 preview
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === '1') { e.preventDefault(); setActivePanel('left'); }
+        if (e.key === '2') { e.preventDefault(); setActivePanel('both'); setLeftWidth(50); }
+        if (e.key === '3') { e.preventDefault(); setActivePanel('right'); }
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+  const handleRefreshPreview = () => {
+    if (previewFrameRef.current) previewFrameRef.current.src = previewFrameRef.current.src;
+  };
+  const handleOpenNewTab = () => window.open(primaryUrl, '_blank');
+  const handleOpenVSCode = () => { window.location.href = `vscode://`; };
+  const handleOpenGitHub = () => { if (repoUrl) window.open(repoUrl, '_blank'); };
+  const handleOpenPreviewTab = () => window.open(effectivePreviewUrl, '_blank');
+
   const showLeft = activePanel === 'both' || activePanel === 'left';
   const showRight = activePanel === 'both' || activePanel === 'right';
-
   const leftPercent = activePanel === 'left' ? 100 : activePanel === 'right' ? 0 : leftWidth;
   const rightPercent = 100 - leftPercent;
 
   return (
     <div className="flex flex-col h-full">
-      {/* Toolbar */}
-      <div className="flex items-center gap-1 px-3 py-1.5 border-b bg-muted/40 flex-shrink-0">
-        <Button
-          variant={activePanel === 'left' ? 'secondary' : 'ghost'}
-          size="icon"
-          className="h-6 w-6"
-          title="Show left panel only"
-          onClick={() => setActivePanel(activePanel === 'left' ? 'both' : 'left')}
-        >
-          <PanelLeft className="h-3.5 w-3.5" />
-        </Button>
-        <Button
-          variant={activePanel === 'both' ? 'secondary' : 'ghost'}
-          size="icon"
-          className="h-6 w-6"
-          title="Show both panels"
-          onClick={() => { setActivePanel('both'); setLeftWidth(50); }}
-        >
-          <Columns2 className="h-3.5 w-3.5" />
-        </Button>
-        <Button
-          variant={activePanel === 'right' ? 'secondary' : 'ghost'}
-          size="icon"
-          className="h-6 w-6"
-          title="Show right panel only"
-          onClick={() => setActivePanel(activePanel === 'right' ? 'both' : 'right')}
-        >
-          <PanelRight className="h-3.5 w-3.5" />
-        </Button>
 
-        {activePanel === 'both' && (
-          <span className="ml-auto text-xs text-muted-foreground tabular-nums">
-            {Math.round(leftWidth)}% / {Math.round(100 - leftWidth)}%
-          </span>
-        )}
+      {/* ── IDE Toolbar ── */}
+      <div className={styles.ideToolbar}>
+
+        {/* LEFT: Preview action buttons + port selector */}
+        <div className={styles.toolbarLeftGroup}>
+          {showExternalButtons && (
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                className={styles.externalBtn}
+                onClick={handleOpenNewTab}
+                title="Open editor in new tab"
+              >
+                <SquareArrowOutUpRight className="h-3 w-3" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className={styles.externalBtn}
+                onClick={handleOpenVSCode}
+                title="Open in VS Code"
+              >
+                <Monitor className="h-3 w-3" />
+              </Button>
+              {repoUrl && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={styles.externalBtn}
+                  onClick={handleOpenGitHub}
+                  title="Open in GitHub"
+                >
+                  <Github className="h-3 w-3" />
+                </Button>
+              )}
+              <div className={styles.toolbarDivider} />
+            </>
+          )}
+
+          {/* Port selector — compact, no "PORT" label */}
+          {showPortSelector && activePanel !== 'left' && (
+            <div className={styles.portSelectorWrapper}>
+              <select
+                value={selectedPort}
+                onChange={(e) => setSelectedPort(e.target.value)}
+                className={styles.portSelectorSelect}
+                title="Select port"
+              >
+                {PORT_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+
+        {/* RIGHT: Refresh + open preview + divider + layout toggles */}
+        <div className={styles.toolbarRightGroup}>
+          {showPortSelector && activePanel !== 'left' && (
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                className={styles.portSelectorBtn}
+                onClick={handleRefreshPreview}
+                title="Refresh preview"
+              >
+                <RotateCcw className="h-3 w-3" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className={styles.portSelectorBtn}
+                onClick={handleOpenPreviewTab}
+                title="Open preview in new tab"
+              >
+                <ExternalLink className="h-3 w-3" />
+              </Button>
+              <div className={styles.toolbarDivider} />
+            </>
+          )}
+        </div>
+
+        <div className={styles.layoutToggleGroup}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={styles.layoutToggleBtn}
+            data-active={activePanel === 'left'}
+            title="Editor only (Ctrl+1)"
+            onClick={() => setActivePanel(activePanel === 'left' ? 'both' : 'left')}
+          >
+            <PanelLeft className="h-3 w-3" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={styles.layoutToggleBtn}
+            data-active={activePanel === 'both'}
+            title="Split view (Ctrl+2)"
+            onClick={() => { setActivePanel('both'); setLeftWidth(50); }}
+          >
+            <Columns2 className="h-3 w-3" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={styles.layoutToggleBtn}
+            data-active={activePanel === 'right'}
+            title="Preview only (Ctrl+3)"
+            onClick={() => setActivePanel(activePanel === 'right' ? 'both' : 'right')}
+          >
+            <PanelRight className="h-3 w-3" />
+          </Button>
+        </div>
       </div>
 
-      {/* Split container */}
+      {/* ── Split container ── */}
       <div
         ref={containerRef}
-        className="flex flex-1 overflow-hidden relative"
+        className={styles.splitContainer}
         style={{ minHeight: 0 }}
       >
-        {/* Left iframe */}
+        {/* Left — Editor iframe */}
         {showLeft && leftPercent > 0 && (
           <div
-            className="flex flex-col overflow-hidden"
+            className={styles.panelColumn}
             style={{ width: `${leftPercent}%`, flexShrink: 0 }}
           >
-            <div className="flex items-center gap-1 px-2 py-1 bg-muted/60 border-b text-xs text-muted-foreground font-medium flex-shrink-0">
-              <span className="w-2 h-2 rounded-full bg-blue-500 inline-block mr-1" />
-              CODE
+            <div className={styles.panelStrip}>
+              <span className={styles.dotBlue} />
+              Editor (VS Code)
             </div>
             <iframe
+              ref={editorFrameRef}
               src={primaryUrl}
-              className="w-full flex-1 border-0"
-              style={{ pointerEvents: isDraggingState ? 'none' : 'auto' }}
+              className={styles.editorIframe}
+              style={inlineStyles.iframePointerEvents(isDraggingState)}
               allow="accelerometer; camera; encrypted-media; geolocation; microphone; midi; usb; xr-spatial-tracking"
             />
           </div>
         )}
 
+        {/* Drag handle */}
         {activePanel === 'both' && (
           <div
             onMouseDown={onMouseDown}
-            className="relative flex-shrink-0 flex items-center justify-center group z-10"
-            style={{
-              width: '12px',
-              cursor: 'col-resize',
-              background: isDraggingState
-                ? 'hsl(var(--primary) / 0.12)'
-                : 'transparent',
-              transition: 'background 0.15s',
-            }}
+            className={styles.dragHandleOuter}
+            style={inlineStyles.dragHandleOuter(isDraggingState)}
             title="Drag to resize"
           >
             <div
-              className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px transition-colors duration-150"
-              style={{
-                background: isDraggingState
-                  ? 'hsl(var(--primary) / 0.6)'
-                  : 'hsl(var(--border))',
-              }}
+              className={styles.dragHandleInnerLine}
+              style={inlineStyles.dragHandleLine(isDraggingState)}
             />
             <div
-              className="relative z-10 flex flex-col items-center justify-center rounded-md transition-all duration-150 shadow-sm"
-              style={{
-                width: '20px',
-                height: '36px',
-                background: isDraggingState
-                  ? 'hsl(var(--primary))'
-                  : 'hsl(var(--background))',
-                border: `1.5px solid ${isDraggingState ? 'hsl(var(--primary))' : 'hsl(var(--border))'}`,
-                boxShadow: isDraggingState
-                  ? '0 0 0 3px hsl(var(--primary) / 0.15)'
-                  : '0 1px 3px hsl(0 0% 0% / 0.08)',
-              }}
+              className={styles.dragHandleKnob}
+              style={inlineStyles.dragHandleKnob(isDraggingState)}
             >
-              <GripVertical
-                className="transition-colors duration-150"
-                style={{
-                  width: '11px',
-                  height: '11px',
-                  color: isDraggingState
-                    ? 'hsl(var(--primary-foreground))'
-                    : 'hsl(var(--muted-foreground))',
-                }}
-              />
+              <GripVertical style={inlineStyles.gripIcon(isDraggingState)} />
             </div>
           </div>
         )}
 
-        {/* Right iframe */}
+        {/* Right — Preview iframe */}
         {showRight && rightPercent > 0 && (
           <div
-            className="flex flex-col overflow-hidden"
+            className={styles.panelColumn}
             style={{ width: `${rightPercent}%`, flexShrink: 0 }}
           >
-            <div className="flex items-center gap-1 px-2 py-1 bg-muted/60 border-b border-l text-xs text-muted-foreground font-medium flex-shrink-0">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block mr-1" />
-              PREVIEW
+            <div className={styles.panelStripRight}>
+              <span className={styles.dotEmerald} />
+              Live Preview
+              {showPortSelector && (
+                <span className={styles.portLabel}>:{selectedPort}</span>
+              )}
             </div>
             <iframe
-              src={secondaryUrl}
-              className="w-full flex-1 border-0 border-l"
-              style={{ pointerEvents: isDraggingState ? 'none' : 'auto' }}
+              ref={previewFrameRef}
+              src={effectivePreviewUrl}
+              className={styles.previewIframe}
+              style={inlineStyles.iframePointerEvents(isDraggingState)}
               allow="accelerometer; camera; encrypted-media; geolocation; microphone; midi; usb; xr-spatial-tracking"
             />
           </div>
         )}
       </div>
+
+      {/* ── Status Bar ── */}
+      {showStatusBar && <StatusBar activePort={selectedPort} />}
     </div>
   );
 }
@@ -235,12 +389,21 @@ function DualIframeView({ primaryUrl, secondaryUrl, fullHeight = false }: DualIf
 
 export function OutputPanel() {
   const dispatch = useAppDispatch();
-  const { selectedTool, outputs, loading, loadingTool } = useAppSelector((state) => state.tools);
+  const { selectedTool, outputs, loading, loadingTool } = useAppSelector(
+    (state) => state.tools,
+  );
   const { selectedProject } = useAppSelector((state) => state.projects);
 
-  const sessionId = selectedProject?.id
-    ? localStorage.getItem(`n8n_session_id_${selectedProject.id}`)
-    : null;
+  // const sessionId = selectedProject?.id
+  //   ? localStorage.getItem(`n8n_session_id_${selectedProject.id}`)
+  //   : null;
+  const normalSessionId = selectedProject?.id
+  ? localStorage.getItem(`n8n_session_id_${selectedProject.id}`)
+  : null;
+
+const specialSessionId = getSpecialSessionId();
+
+const sessionId = specialSessionId ?? normalSessionId;
   const editorUrl = sessionId
     ? `https://code-generation-server.eastus2.cloudapp.azure.com/${sessionId}/editor/`
     : null;
@@ -254,13 +417,11 @@ export function OutputPanel() {
 
   const handleRefresh = (tool) => {
     if (!selectedProject) return;
-
     const payload = {
       projectId: selectedProject.id,
       usecase: selectedProject.usecase,
       projectName: selectedProject.projectName,
     };
-
     if (tool && tool !== 'orchestrator') {
       dispatch(runTool({ tool, payload }));
     } else {
@@ -283,25 +444,18 @@ export function OutputPanel() {
     }
   };
 
-  /* ================= Orchestrator — Maximized Code View ================= */
-
   if (selectedTool === 'orchestrator' && maximizedCodeTool) {
     return (
-      <div className="flex flex-col h-full bg-background" style={{ flex: 1, minWidth: 0 }}>
-        <div className="p-4 border-b flex items-center justify-between flex-shrink-0">
-          <h2 className="text-lg font-semibold">
+      <div className={styles.panelRoot} style={{ flex: 1, minWidth: 0 }}>
+        <div className={styles.sectionHeaderFlex}>
+          <h2 className={styles.sectionTitle}>
             {maximizedCodeTool.tool === 'code_gen' && 'Code Generation'}
             {maximizedCodeTool.tool === 'cicd' && 'CI/CD'}
             {maximizedCodeTool.tool === 'test_cases' && 'Test Cases'}
             {maximizedCodeTool.tool === 'test_data' && 'Test Data'}
           </h2>
-
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setMaximizedCodeTool(null)}
-            >
+            <Button variant="outline" size="sm" onClick={() => setMaximizedCodeTool(null)}>
               <Minimize2 className="h-4 w-4 mr-2" />
               Close
             </Button>
@@ -311,21 +465,27 @@ export function OutputPanel() {
               onClick={() => handleRefresh(maximizedCodeTool.tool)}
               disabled={loading}
             >
-              {loading ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              ) : (
-                <RefreshCw className="h-4 w-4 mr-2" />
-              )}
+              {loading
+                ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                : <RefreshCw className="h-4 w-4 mr-2" />}
             </Button>
           </div>
         </div>
-
         <div className="flex-1 overflow-hidden">
           {editorUrl && previewUrl ? (
-            <DualIframeView primaryUrl={editorUrl} secondaryUrl={previewUrl} />
+            <DualIframeView
+              primaryUrl={editorUrl}
+              secondaryUrl={previewUrl}
+              sessionId={sessionId}
+              showCloneButton
+              showStatusBar
+              showPortSelector
+              showExternalButtons
+              repoUrl={outputs[maximizedCodeTool.tool]?.repoUrl}
+            />
           ) : (
-            <div className="flex items-center justify-center h-full">
-              <p className="text-sm text-muted-foreground">No session found</p>
+            <div className={styles.emptyCenter}>
+              <p className={styles.emptyState}>No session found</p>
             </div>
           )}
         </div>
@@ -333,24 +493,20 @@ export function OutputPanel() {
     );
   }
 
-  /* ================= Orchestrator — Normal Workflow View ================= */
-
   if (selectedTool === 'orchestrator') {
     return (
-      <div className="flex flex-col h-full bg-background" style={{ flex: 1, minWidth: 0 }}>
-        <div className="p-4 border-b flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Workflow Output</h2>
+      <div className={styles.panelRoot} style={{ flex: 1, minWidth: 0 }}>
+        <div className={styles.sectionHeader}>
+          <h2 className={styles.sectionTitle}>Workflow Output</h2>
           <Button
             variant="outline"
             size="sm"
             onClick={() => handleRefresh('orchestrator')}
             disabled={loading}
           >
-            {loading ? (
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
-            ) : (
-              <RefreshCw className="h-4 w-4 mr-2" />
-            )}
+            {loading
+              ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              : <RefreshCw className="h-4 w-4 mr-2" />}
             Run Workflow
           </Button>
         </div>
@@ -377,7 +533,11 @@ export function OutputPanel() {
               icon={<ImageIcon className="h-4 w-4" />}
               loading={loadingTool === 'arch_gen'}
               onRefresh={() => handleRefresh('arch_gen')}
-              onViewImage={outputs.arch_gen?.image ? () => openPreview(outputs.arch_gen.image) : null}
+              onViewImage={
+                outputs.arch_gen?.image
+                  ? () => openPreview(outputs.arch_gen.image)
+                  : null
+              }
             >
               <ArchitectureOutput data={outputs.arch_gen} />
             </OutputCard>
@@ -387,12 +547,15 @@ export function OutputPanel() {
               icon={<ImageIcon className="h-4 w-4" />}
               loading={loadingTool === 'arch_val'}
               onRefresh={() => handleRefresh('arch_val')}
-              onViewImage={outputs.arch_val?.image ? () => openPreview(outputs.arch_val.image) : null}
+              onViewImage={
+                outputs.arch_val?.image
+                  ? () => openPreview(outputs.arch_val.image)
+                  : null
+              }
             >
               <ArchitectureOutput data={outputs.arch_val} />
             </OutputCard>
 
-            {/* Code Base — DualIframeView inside fixed-height container */}
             <OutputCard
               title="Code Base"
               icon={<Code className="h-4 w-4" />}
@@ -406,40 +569,44 @@ export function OutputPanel() {
             >
               {outputs.code_gen && editorUrl && previewUrl ? (
                 <div
-                  className="rounded-lg overflow-hidden border"
-                  style={{ height: '400px' }}
+                  className={styles.codeBaseIframeWrapper}
+                  style={inlineStyles.codeBaseCard(440)}
                 >
-                  <DualIframeView primaryUrl={editorUrl} secondaryUrl={previewUrl} />
+                  <DualIframeView
+                    primaryUrl={editorUrl}
+                    secondaryUrl={previewUrl}
+                    sessionId={sessionId}
+                    showCloneButton
+                    showStatusBar
+                    showPortSelector
+                    showExternalButtons
+                    repoUrl={outputs.code_gen?.repoUrl}
+                  />
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground">No data found</p>
+                <p className={styles.emptyState}>No data found</p>
               )}
             </OutputCard>
           </div>
         </ScrollArea>
 
-        {/* Image Modal */}
+        {/* Image lightbox */}
         {previewOpen && previewImage && (
           <div
-            className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center"
+            className={styles.lightboxBackdrop}
             onClick={() => setPreviewOpen(false)}
           >
             <div
-              className="bg-white rounded-xl shadow-xl p-6 max-w-[85vw] max-h-[85vh]"
+              className={styles.lightboxCard}
               onClick={(e) => e.stopPropagation()}
             >
-              <img
-                src={previewImage}
-                className="max-w-full max-h-[75vh] object-contain"
-              />
+              <img src={previewImage} className={styles.lightboxImage} />
             </div>
           </div>
         )}
       </div>
     );
   }
-
-  /* ================= Individual Tool View ================= */
 
   const isCodeTool = ['code_gen', 'cicd', 'test_cases', 'test_data'].includes(selectedTool);
 
@@ -448,84 +615,43 @@ export function OutputPanel() {
 
     if (!sessionId || !editorUrl || !previewUrl) {
       return (
-        <div className="flex flex-col h-full bg-background items-center justify-center">
-          <p className="text-sm text-muted-foreground">No session found</p>
+        <div className={`${styles.panelRoot} items-center justify-center`}>
+          <p className={styles.emptyState}>No session found</p>
         </div>
       );
     }
 
-    const handleOpenNewTab = () => {
-      window.open(editorUrl, '_blank');
-    };
-
-    const handleOpenVSCode = () => {
-      const vscodeUrl = `vscode://file/home/coder`;
-      window.location.href = vscodeUrl;
-    };
-
-    const handleOpenGitHub = () => {
-      if (toolData?.repoUrl) {
-        window.open(toolData.repoUrl, '_blank');
-      }
-    };
-
     return (
-      <div className="flex flex-col h-full bg-background" style={{ flex: 1, minWidth: 0 }}>
-        {/* Header */}
-        <div className="p-4 border-b flex items-center justify-between flex-shrink-0">
-          <h2 className="text-lg font-semibold">{getToolLabel(selectedTool)}</h2>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleOpenNewTab}
-              title="Open in New Tab"
-            >
-              <SquareArrowOutUpRight className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleOpenVSCode}
-              title="Open in VS Code"
-            >
-              <Monitor className="h-4 w-4" />
-            </Button>
-            {toolData?.repoUrl && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleOpenGitHub}
-                title="Open in GitHub"
-              >
-                <Github className="h-4 w-4" />
-              </Button>
-            )}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleRefresh(selectedTool)}
-              disabled={loading}
-            >
-              {loading ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              ) : (
-                <RefreshCw className="h-4 w-4 mr-2" />
-              )}
-            </Button>
-          </div>
+      <div className={styles.panelRoot} style={{ flex: 1, minWidth: 0 }}>
+        <div className={styles.sectionHeaderFlex}>
+          <h2 className={styles.sectionTitle}>{getToolLabel(selectedTool)}</h2>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleRefresh(selectedTool)}
+            disabled={loading}
+          >
+            {loading
+              ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              : <RefreshCw className="h-4 w-4 mr-2" />}
+          </Button>
         </div>
 
-        {/* Dual Iframe Split View */}
         <div className="flex-1 overflow-hidden">
           {toolData ? (
             <DualIframeView
               primaryUrl={editorUrl}
               secondaryUrl={previewUrl}
+              sessionId={sessionId}
+              showCloneButton
+              showStatusBar
+              showPortSelector
+              showExternalButtons
+              repoUrl={toolData?.repoUrl}
             />
           ) : (
-            <div className="flex items-center justify-center h-full">
-              <p className="text-sm text-muted-foreground">No data found</p>
+            <div className={styles.emptyCenter}>
+              <p className={styles.emptyState}>No data found</p>
             </div>
           )}
         </div>
@@ -533,62 +659,54 @@ export function OutputPanel() {
     );
   }
 
-  /* ================= Non-code Individual Tool View ================= */
-
   return (
-    <div className="flex flex-col h-full bg-background" style={{ flex: 1, minWidth: 0 }}>
-      <div className="p-4 border-b flex items-center justify-between">
-        <h2 className="text-lg font-semibold">{getToolLabel(selectedTool)}</h2>
-
+    <div className={styles.panelRoot} style={{ flex: 1, minWidth: 0 }}>
+      <div className={styles.sectionHeader}>
+        <h2 className={styles.sectionTitle}>{getToolLabel(selectedTool)}</h2>
         <div className="flex items-center gap-2">
           {(selectedTool === 'arch_gen' || selectedTool === 'arch_val') && (
-            <Button size="sm" variant="secondary" onClick={() => {
-              const img = selectedTool === 'arch_gen'
-                ? outputs.arch_gen?.image
-                : outputs.arch_val?.image;
-              openPreview(img);
-            }}>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => {
+                const img =
+                  selectedTool === 'arch_gen'
+                    ? outputs.arch_gen?.image
+                    : outputs.arch_val?.image;
+                openPreview(img);
+              }}
+            >
               View image
             </Button>
           )}
-
           <Button
             variant="outline"
             size="sm"
             onClick={() => handleRefresh(selectedTool)}
             disabled={loading}
           >
-            {loading ? (
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
-            ) : (
-              <RefreshCw className="h-4 w-4 mr-2" />
-            )}
+            {loading
+              ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              : <RefreshCw className="h-4 w-4 mr-2" />}
           </Button>
         </div>
       </div>
 
       <ScrollArea className="flex-1 p-4">
-        <IndividualToolOutput
-          tool={selectedTool}
-          outputs={outputs}
-          loading={loading}
-        />
+        <IndividualToolOutput tool={selectedTool} outputs={outputs} loading={loading} />
       </ScrollArea>
 
-      {/* Image Modal */}
+      {/* Image lightbox */}
       {previewOpen && previewImage && (
         <div
-          className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center"
+          className={styles.lightboxBackdrop}
           onClick={() => setPreviewOpen(false)}
         >
           <div
-            className="bg-white rounded-xl shadow-xl p-6 max-w-[85vw] max-h-[85vh]"
+            className={styles.lightboxCard}
             onClick={(e) => e.stopPropagation()}
           >
-            <img
-              src={previewImage}
-              className="max-w-full max-h-[75vh] object-contain"
-            />
+            <img src={previewImage} className={styles.lightboxImage} />
           </div>
         </div>
       )}
@@ -596,23 +714,22 @@ export function OutputPanel() {
   );
 }
 
-/* ================= Sub Components ================= */
 
 function OutputCard({ title, icon, children, loading, onRefresh, onViewImage, onMaximize }) {
   return (
     <Card>
       <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
+        <div className={styles.outputCardHeaderRow}>
+          <CardTitle className={styles.outputCardTitle}>
             {icon}
             {title}
           </CardTitle>
-          <div className="flex items-center gap-2">
+          <div className={styles.outputCardActions}>
             {onViewImage && (
               <Button
                 variant="outline"
                 size="sm"
-                className="h-7"
+                className={styles.outputCardActionBtn}
                 onClick={onViewImage}
               >
                 <Eye className="h-3 w-3 mr-1" />
@@ -623,7 +740,7 @@ function OutputCard({ title, icon, children, loading, onRefresh, onViewImage, on
               <Button
                 variant="outline"
                 size="sm"
-                className="h-7"
+                className={styles.outputCardActionBtn}
                 onClick={onMaximize}
               >
                 <Maximize2 className="h-3 w-3 mr-1" />
@@ -633,15 +750,13 @@ function OutputCard({ title, icon, children, loading, onRefresh, onViewImage, on
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7"
+                className={styles.outputCardRefreshBtn}
                 onClick={onRefresh}
                 disabled={loading}
               >
-                {loading ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <RefreshCw className="h-3 w-3" />
-                )}
+                {loading
+                  ? <Loader2 className="h-3 w-3 animate-spin" />
+                  : <RefreshCw className="h-3 w-3" />}
               </Button>
             )}
           </div>
@@ -652,18 +767,21 @@ function OutputCard({ title, icon, children, loading, onRefresh, onViewImage, on
   );
 }
 
-function EpicsOutput({ data }: { data?: { titles: string[]; ids?: string[]; jiraUrl: string } }) {
+function EpicsOutput({
+  data,
+}: {
+  data?: { titles: string[]; ids?: string[]; jiraUrl: string };
+}) {
   if (!data || !data.titles || data.titles.length === 0) {
-    return <p className="text-sm text-muted-foreground">No data found</p>;
+    return <p className={styles.emptyState}>No data found</p>;
   }
-
   return (
     <div className="space-y-3">
       {data.titles.slice(0, 2).map((title: string, i: number) => (
-        <div key={i} className="p-3 bg-muted rounded-lg">
-          <p className="text-sm font-medium">
+        <div key={i} className={styles.epicItem}>
+          <p className={styles.epicTitle}>
             {data.ids?.[i] && (
-              <span className="text-primary font-semibold mr-2">{data.ids[i]}</span>
+              <span className={styles.epicId}>{data.ids[i]}</span>
             )}
             {title}
           </p>
@@ -681,112 +799,60 @@ function EpicsOutput({ data }: { data?: { titles: string[]; ids?: string[]; jira
 }
 
 function ArchitectureOutput({ data }) {
-  if (!data?.image)
-    return <p className="text-sm text-muted-foreground">No data found</p>;
-
+  if (!data?.image) return <p className={styles.emptyState}>No data found</p>;
   return (
-    <div className="relative h-[320px] rounded-lg overflow-hidden border bg-muted">
-      <img src={data.image} className="w-full h-full object-contain" />
+    <div className={styles.archImageWrapper}>
+      <img src={data.image} className={styles.archImage} />
     </div>
   );
 }
 
-function StackBlitzOutput({ data, fullHeight = false, isOrchestrator = false }) {
+function StackBlitzOutput({
+  data,
+  fullHeight = false,
+  isOrchestrator = false,
+}: {
+  data: any;
+  fullHeight?: boolean;
+  isOrchestrator?: boolean;
+}) {
   const { selectedProject } = useAppSelector((state) => state.projects);
   const sessionId = selectedProject?.id
     ? localStorage.getItem(`n8n_session_id_${selectedProject.id}`)
     : null;
 
-  if (!sessionId) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        No session found
-      </p>
-    );
-  }
+  if (!sessionId) return <p className={styles.emptyState}>No session found</p>;
 
   const localHostUrl = `https://code-generation-server.eastus2.cloudapp.azure.com/${sessionId}/`;
-  const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
-  if (!data) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        No data found
-      </p>
-    );
-  }
-
-  const handleOpenNewTab = () => {
-    window.open(localHostUrl, '_blank');
-  };
-
-  const handleOpenVSCode = () => {
-    const vscodeUrl = `vscode://file/home/coder`;
-    window.location.href = vscodeUrl;
-  };
-
-  const handleOpenGitHub = () => {
-    if (data.repoUrl) {
-      window.open(data.repoUrl, '_blank');
-    }
-  };
+  if (!data) return <p className={styles.emptyState}>No data found</p>;
 
   return (
     <div className={`flex flex-col ${fullHeight ? 'h-full' : 'space-y-3'}`}>
       <div
-        className="relative rounded-lg overflow-hidden border bg-muted"
-        style={{
-          height: fullHeight
-            ? '100%'
-            : isOrchestrator
-            ? '320px'
-            : '300px',
-          minHeight: isOrchestrator ? '320px' : undefined,
-        }}
+        className={styles.stackBlitzWrapper}
+        style={inlineStyles.stackBlitzFrame(fullHeight, isOrchestrator)}
       >
         <iframe
-          ref={iframeRef}
           src={localHostUrl}
-          className="w-full h-full"
+          className={styles.stackBlitzIframe}
           allow="accelerometer; camera; encrypted-media; geolocation; microphone; midi; usb; xr-spatial-tracking"
         />
       </div>
-
-      {!fullHeight && (
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleOpenNewTab}
-            title="Open in New Tab"
-          >
-            <SquareArrowOutUpRight className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleOpenVSCode}
-            title="Open in VS Code"
-          >
-            <Monitor className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleOpenGitHub}
-            title="Open in GitHub"
-          >
-            <Github className="h-4 w-4" />
-          </Button>
-        </div>
-      )}
     </div>
   );
 }
 
-function IndividualToolOutput({ tool, outputs, loading }: { tool: string; outputs: any; loading: boolean }) {
+function IndividualToolOutput({
+  tool,
+  outputs,
+  loading,
+}: {
+  tool: string;
+  outputs: any;
+  loading: boolean;
+}) {
   const isCodeTool = ['code_gen', 'cicd', 'test_cases', 'test_data'].includes(tool);
-
   switch (tool) {
     case 'epics':
       return <EpicsOutput data={outputs.epics_and_user_stories} />;
@@ -803,6 +869,6 @@ function IndividualToolOutput({ tool, outputs, loading }: { tool: string; output
     case 'test_data':
       return <StackBlitzOutput data={outputs.test_data} fullHeight={isCodeTool} />;
     default:
-      return <p className="text-sm text-muted-foreground">Select a tool to view output</p>;
+      return <p className={styles.emptyState}>Select a tool to view output</p>;
   }
 }

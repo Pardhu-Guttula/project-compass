@@ -7,6 +7,13 @@
  import { useNavigate } from 'react-router-dom';
  import { User, ArrowLeft, Settings, GitBranch, ExternalLink } from 'lucide-react';
  import { Badge } from '@/components/ui/badge';
+import { Switch } from "@/components/ui/switch";
+import {
+  enableSpecialSession,
+  disableSpecialSession,
+  isSpecialSessionActive,
+} from "@/components/session";
+import { useState } from "react";
  
  export function TopNavigation() {
    const dispatch = useAppDispatch();
@@ -19,6 +26,22 @@
      dispatch(clearMessages());
      navigate('/');
    };
+
+   const [isSpecialMode, setIsSpecialMode] = useState(
+  isSpecialSessionActive()
+);
+
+const handleToggle = (checked: boolean) => {
+  setIsSpecialMode(checked);
+
+  if (checked) {
+    const newSession = enableSpecialSession();
+    console.log("Special Session Started:", newSession);
+  } else {
+    disableSpecialSession();
+    console.log("Special Session Disabled");
+  }
+};
  
    return (
      <header className="h-14 border-b bg-card flex items-center justify-between px-4">
@@ -27,9 +50,15 @@
            <ArrowLeft className="h-4 w-4" />
          </Button>
          <div>
-           <h1 className="font-semibold text-foreground">
+           {/* <h1 className="font-semibold text-foreground">
              {selectedProject?.projectName || 'SDLC Workspace'}
-           </h1>
+           </h1> */}
+           <div className="flex items-center gap-3">
+  <h1 className="font-semibold text-foreground">
+    {selectedProject?.projectName || "SDLC Workspace"}
+  </h1>
+
+</div>
            {selectedProject && (
              <p className="text-xs text-muted-foreground line-clamp-1">
                {selectedProject.usecase}
@@ -44,15 +73,37 @@
              <User className="h-5 w-5" />
            </Button>
          </PopoverTrigger>
-         <PopoverContent align="end" className="w-80">
+         <PopoverContent align="end" className="w-80 max-h-[80vh] overflow-y-auto pr-2">
            {selectedProject ? (
              <div className="space-y-4">
-               <div>
+               {/* <div>
                  <h3 className="font-semibold">{selectedProject.projectName}</h3>
                  <Badge variant="outline" className="mt-1">
                    {selectedProject.projectType}
                  </Badge>
-               </div>
+               </div> */}
+               <div className="flex items-center justify-between">
+  <div>
+    <h3 className="font-semibold">
+      {selectedProject.projectName}
+    </h3>
+    <Badge variant="outline" className="mt-1">
+      {selectedProject.projectType}
+    </Badge>
+  </div>
+
+  <div className="flex items-center gap-2">
+    <Switch
+      checked={isSpecialMode}
+      onCheckedChange={handleToggle}
+      className="scale-75 data-[state=checked]:bg-gray-300 data-[state=unchecked]:bg-gray-200"
+    />
+{isSpecialMode && (
+  <span className="text-xs text-muted-foreground">
+  </span>
+)}
+  </div>
+</div>
  
                <div className="space-y-2 text-sm">
                  <div>

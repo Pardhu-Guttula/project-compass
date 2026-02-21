@@ -9,10 +9,13 @@ import { getWebhookUrl } from '@/constants/tools';
 import { runOrchestrator, runTool } from '@/features/tools/toolsThunks';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { getSpecialSessionId } from "@/components/session";
 
-const SESSION_EXPIRATION_MS = 60 * 60 * 1000;
+const SESSION_EXPIRATION_MS = 5 * 60 * 60 * 1000;
 
-const SESSION_API_BASE_URL = 'http://9.234.203.92:5000';
+const SESSION_API_BASE_URL = '/api';
+
+const specialSessionId = getSpecialSessionId();
 
 
 const stopSession = async (sessionId: string) => {
@@ -144,7 +147,7 @@ export function ChatPanel({ width, onResize }: ChatPanelProps) {
       metadata: {
         project_name: selectedProject?.projectName || '',
         usecase: selectedProject?.usecase || '',
-        sessionId: sessionId,
+        sessionId: getSpecialSessionId() ?? sessionId,
         tool: selectedTool || 'orchestrator',
       },
       mode: 'fullscreen',
@@ -234,6 +237,7 @@ export function ChatPanel({ width, onResize }: ChatPanelProps) {
         projectId: selectedProject.id,
         usecase: selectedProject.usecase,
         projectName: selectedProject.projectName,
+        sessionId: specialSessionId ?? currentSessionIdRef.current,
       };
 
       if (selectedTool === 'orchestrator') {
@@ -401,3 +405,4 @@ export function ChatPanel({ width, onResize }: ChatPanelProps) {
 }
 
 export default ChatPanel;
+ 
